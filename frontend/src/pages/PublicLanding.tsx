@@ -58,16 +58,16 @@ export default function PublicLanding() {
                         <div className="relative order-2 lg:order-1">
                             <div className="absolute -inset-4 bg-gradient-to-br from-green-100 to-blue-50 rounded-3xl -z-10 transform -rotate-2"></div>
                             <img
-                                src="/assets/fresh-produce.png"
-                                alt="Premium Fresh Produce"
+                                src="/assets/food-warehouse.png"
+                                alt="Modern Food Warehouse Facility"
                                 className="rounded-2xl shadow-2xl w-full object-cover h-[600px] transform hover:scale-[1.02] transition-transform duration-500"
                             />
                             <div className="absolute bottom-8 left-8 bg-white/95 backdrop-blur p-6 rounded-xl shadow-lg border border-gray-100 max-w-xs">
                                 <div className="flex items-center gap-3 mb-2">
                                     <Leaf className="h-6 w-6 text-green-600" />
-                                    <span className="font-bold text-gray-900">Farm Fresh Quality</span>
+                                    <span className="font-bold text-gray-900">State-of-the-Art Facility</span>
                                 </div>
-                                <p className="text-sm text-gray-600">Sourced directly from certified growers to ensure peak freshness.</p>
+                                <p className="text-sm text-gray-600">Temperature-controlled warehouse ensuring optimal storage conditions.</p>
                             </div>
                         </div>
 
