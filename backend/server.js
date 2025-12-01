@@ -36,6 +36,7 @@ app.use(
       "http://localhost:5173",
       "https://hksfoods.com",
       "https://www.hksfoods.com",
+      "https://hksfoods.netlify.app",
       process.env.FRONTEND_URL
     ].filter(Boolean),
     credentials: true,
