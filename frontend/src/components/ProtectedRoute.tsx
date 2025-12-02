@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
+import api from "@/utils/api"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -15,10 +16,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("token")
-      
+
       if (!token) {
         setIsAuthenticated(false)
-        navigate("/login", { 
+        navigate("/login", {
           replace: true,
           state: { from: location }
         })
@@ -26,20 +27,16 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
 
       try {
-        const response = await fetch("http://localhost:5000/api/auth/me", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const response = await api.get("/auth/me")
 
-        if (response.ok) {
+        if (response.data.success) {
           setIsAuthenticated(true)
         } else {
           // Token is invalid
           localStorage.removeItem("token")
           localStorage.removeItem("admin")
           setIsAuthenticated(false)
-          navigate("/login", { 
+          navigate("/login", {
             replace: true,
             state: { from: location }
           })
@@ -49,7 +46,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         localStorage.removeItem("token")
         localStorage.removeItem("admin")
         setIsAuthenticated(false)
-        navigate("/login", { 
+        navigate("/login", {
           replace: true,
           state: { from: location }
         })
