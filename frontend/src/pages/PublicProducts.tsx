@@ -30,7 +30,14 @@ export default function PublicProducts() {
 
     const fetchProducts = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/public/products")
+            // Determine API URL based on environment
+            const apiUrl = window.location.hostname === 'hksfoods.com' ||
+                window.location.hostname === 'www.hksfoods.com' ||
+                window.location.hostname === 'hksfoods.netlify.app'
+                ? 'https://hks-foods.onrender.com/api/public/products'
+                : 'http://localhost:5000/api/public/products';
+
+            const response = await fetch(apiUrl)
             const data = await response.json()
             if (data.success) {
                 setProducts(data.products)

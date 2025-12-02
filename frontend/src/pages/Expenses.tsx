@@ -23,7 +23,7 @@ import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 
 interface Expense {
   _id: string
@@ -380,8 +380,12 @@ export default function Expenses() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
     try {
-      // Use the full URL to your logo
-      const logoUrl = 'http://localhost:8080/logoupdt.png';
+      // Use the full URL to your logo - detect environment
+      const logoUrl = window.location.hostname === 'hksfoods.com' ||
+        window.location.hostname === 'www.hksfoods.com' ||
+        window.location.hostname === 'hksfoods.netlify.app'
+        ? 'https://hksfoods.com/logoupdt.png'
+        : 'http://localhost:8080/logoupdt.png';
 
       console.log('Loading logo from:', logoUrl);
 
