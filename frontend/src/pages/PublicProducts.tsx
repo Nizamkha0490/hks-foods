@@ -30,14 +30,25 @@ export default function PublicProducts() {
 
     const fetchProducts = async () => {
         try {
-            // Determine API URL based on environment
-            const apiUrl = window.location.hostname === 'hksfoods.com' ||
-                window.location.hostname === 'www.hksfoods.com' ||
-                window.location.hostname === 'hksfoods.netlify.app'
-                ? 'https://hks-foods.onrender.com/api/public/products'
-                : 'http://localhost:5000/api/public/products';
+            // Determine API URL - prioritize environment variable, then hostname detection
+            const getApiUrl = () => {
+                // Use environment variable if set (most reliable)
+                if (import.meta.env.VITE_API_BASE_URL) {
+                    return `${import.meta.env.VITE_API_BASE_URL}/public/products`;
+                }
 
-            const response = await fetch(apiUrl)
+                // Fallback to hostname detection for production
+                if (window.location.hostname === 'hksfoods.com' ||
+                    window.location.hostname === 'www.hksfoods.com' ||
+                    window.location.hostname === 'hksfoods.netlify.app') {
+                    return 'https://hks-foods.onrender.com/api/public/products';
+                }
+
+                // Default to localhost for development
+                return 'http://localhost:5000/api/public/products';
+            };
+
+            const response = await fetch(getApiUrl())
             const data = await response.json()
             if (data.success) {
                 setProducts(data.products)

@@ -380,12 +380,20 @@ export default function Expenses() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
     try {
-      // Use the full URL to your logo - detect environment
-      const logoUrl = window.location.hostname === 'hksfoods.com' ||
-        window.location.hostname === 'www.hksfoods.com' ||
-        window.location.hostname === 'hksfoods.netlify.app'
-        ? 'https://hksfoods.com/logoupdt.png'
-        : 'http://localhost:8080/logoupdt.png';
+      // Determine logo URL - prioritize environment variable, then hostname detection
+      const getLogoUrl = () => {
+        // Use environment variable if set (most reliable)
+        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') ||
+          (window.location.hostname === 'hksfoods.com' ||
+            window.location.hostname === 'www.hksfoods.com' ||
+            window.location.hostname === 'hksfoods.netlify.app'
+            ? 'https://hksfoods.com'
+            : 'http://localhost:8080');
+
+        return `${baseUrl}/logoupdt.png`;
+      };
+
+      const logoUrl = getLogoUrl();
 
       console.log('Loading logo from:', logoUrl);
 
