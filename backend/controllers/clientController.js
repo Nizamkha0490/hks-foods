@@ -623,7 +623,7 @@ export const exportClientStatement = asyncHandler(async (req, res) => {
 
   // Terms and conditions
   doc.fontSize(7).fillColor("#666666");
-  doc.text("Payment Terms: Net 30 days | Late payments subject to interest charges", { align: "center" });
+  doc.text("payment within 3 days term", { align: "center" });
   doc.moveDown(0.5);
 
   // Bottom separator line
