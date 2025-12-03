@@ -557,16 +557,12 @@ export const exportOrderReceipt = async (req, res) => {
       .font("Helvetica")
       .text(settings?.address || "104 ANTHONY ROAD", { align: "center" })
       .text(settings?.postalCode || "BIRMINGHAM B83AA", { align: "center" })
-      .text(
-        `${settings?.contactNumber || "Tel:+44 7477 956299"} | VAT NUMBER: ${settings?.vatNumber || "495814839"} | Company No: ${settings?.companyNumber || "16372393"}`,
-        { align: "center" },
-      )
 
     // Receipt Title and Order Info
     doc.moveDown(0.5)
     doc.strokeColor("#1e3a8a").lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke()
     doc.moveDown(0.5)
-    doc.fillColor("#000000").fontSize(16).font("Helvetica-Bold").text("TAX INVOICE", { align: "center" })
+    // doc.fillColor("#000000").fontSize(16).font("Helvetica-Bold").text("TAX INVOICE", { align: "center" })
 
     doc.moveDown(0.3)
     doc
@@ -629,9 +625,9 @@ export const exportOrderReceipt = async (req, res) => {
 
     // Add Company Stamp to the right of ORDER INFORMATION
     try {
-      const stampPath = "C:/Users/Nizam/.gemini/antigravity/brain/a382d99f-886a-44e9-a5e6-99d841189613/uploaded_image_1764792454211.jpg"
+      const stampPath = "C:/Users/Nizam/.gemini/antigravity/brain/3f8a61c8-5389-4bba-8dcf-c5d0048950f5/uploaded_image_1_1764803609762.png"
       const stampX = 460  // Right side position
-      const stampY = detailsY
+      const stampY = detailsY - 20
       const stampWidth = 80
       const stampHeight = 80
 
@@ -796,7 +792,7 @@ export const exportOrderReceipt = async (req, res) => {
       )
 
     // Center - Company info
-    doc.text("HKS Foods Ltd | Registered in England | Company No: 16372393", { align: "center" })
+    doc.text(`HKS Foods Ltd | VAT NUMBER: ${settings?.vatNumber || "495814839"} | Company No: 16372393`, { align: "center" })
 
     // Right - Page info
     doc.text("Page 1 of 1", 515, footerContentY, { align: "right" })
