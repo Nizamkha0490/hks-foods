@@ -579,9 +579,9 @@ export const exportOrderReceipt = async (req, res) => {
     // Client and Order Details
     const detailsY = doc.y + 15
 
-    // Two column layout
+    // Two column layout - ADJUSTED for stamp
     const leftColumnX = 40
-    const rightColumnX = 300
+    const rightColumnX = 280  // Moved left to make room for stamp
 
     // Client Details - Left Column
     doc.fillColor("#1e3a8a").fontSize(10).font("Helvetica-Bold").text("BILL TO:", leftColumnX, detailsY)
@@ -612,7 +612,8 @@ export const exportOrderReceipt = async (req, res) => {
         }
       }
     }
-    // Order Details - Right Column - FIXED: Proper text rendering
+
+    // Order Details - Right Column (shifted left)
     doc.fillColor("#1e3a8a").font("Helvetica-Bold").text("ORDER INFORMATION:", rightColumnX, detailsY)
 
     doc
@@ -620,34 +621,53 @@ export const exportOrderReceipt = async (req, res) => {
       .font("Helvetica")
       .fontSize(9)
       .text(`Invoice Type: ${order.invoiceType || "N/A"}`, rightColumnX, detailsY + 15)
-      .text(`Payment Method: ${order.paymentMethod || "N/A"}`, rightColumnX, detailsY + 27)
-      .text(`VAT Treatment: ${order.includeVAT ? "VAT Included" : "VAT Excluded"}`, rightColumnX, detailsY + 39)
+      .text(`VAT Treatment: ${order.includeVAT ? "VAT Included" : "VAT Excluded"}`, rightColumnX, detailsY + 27)
 
     if (order.deliveryCost && order.deliveryCost > 0) {
-      doc.text(`Delivery: £${Number(order.deliveryCost).toFixed(2)}`, rightColumnX, detailsY + 51)
+      doc.text(`Delivery: £${Number(order.deliveryCost).toFixed(2)}`, rightColumnX, detailsY + 39)
+    }
+
+    // Add Company Stamp to the right of ORDER INFORMATION
+    try {
+      const stampPath = "C:/Users/Nizam/.gemini/antigravity/brain/a382d99f-886a-44e9-a5e6-99d841189613/uploaded_image_1764792454211.jpg"
+      const stampX = 460  // Right side position
+      const stampY = detailsY
+      const stampWidth = 80
+      const stampHeight = 80
+
+      doc.image(stampPath, stampX, stampY, {
+        width: stampWidth,
+        height: stampHeight,
+        align: 'right'
+      })
+    } catch (stampError) {
+      console.log("Stamp image not found, skipping:", stampError.message)
     }
 
     // Items Table - Start at appropriate position
-    const tableTop = Math.max(clientY, detailsY + 65) + 15
+    const tableTop = Math.max(clientY, detailsY + 90) + 15
 
-    // Table Header with dark blue background
+    // Table Header with dark blue background - UPDATED with VAT column
     doc.fillColor("#1e3a8a").rect(40, tableTop, 515, 20).fill()
 
     doc.fillColor("#ffffff").fontSize(9).font("Helvetica-Bold")
 
-    const itemX = 45,
-      descX = 70,
-      qtyX = 350,
-      priceX = 410,
-      totalX = 480
+    const itemX = 45
+    const descX = 70
+    const qtyX = 310
+    const priceX = 360
+    const vatX = 420
+    const totalX = 480
 
     doc.text("#", itemX, tableTop + 7)
     doc.text("DESCRIPTION", descX, tableTop + 7)
     doc.text("QTY", qtyX, tableTop + 7)
-    doc.text("UNIT PRICE", priceX, tableTop + 7)
+    doc.text("PRICE", priceX, tableTop + 7)
+    doc.text("VAT", vatX, tableTop + 7)
     doc.text("AMOUNT", totalX, tableTop + 7)
 
-    // Table Rows
+
+    // Table Rows - UPDATED with VAT column
     doc.fillColor("#000000").fontSize(8).font("Helvetica")
 
     let y = tableTop + 25
@@ -686,20 +706,23 @@ export const exportOrderReceipt = async (req, res) => {
       }
 
       doc.text(`${index + 1}`, itemX, y)
-      doc.text(productName, descX, y, { width: 260, align: "left" })
-      doc.text(qty.toString(), qtyX, y, { width: 40, align: "right" })
-      doc.text(`£${price.toFixed(2)}`, priceX, y, { width: 50, align: "right" })
-      doc.text(`£${lineTotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+      doc.text(productName, descX, y, { width: 220, align: "left" })
+      doc.text(qty.toString(), qtyX, y, { width: 35, align: "right" })
+      doc.text(`£${price.toFixed(2)}`, priceX, y, { width: 45, align: "right" })
 
-      // VAT indicator for products
+      // VAT Value Column - show VAT amount
       if (order.includeVAT) {
-        doc.fontSize(6).fillColor("#666666")
-        doc.text(`${vatRate}% VAT`, descX, y + 9)
-        doc.fontSize(8).fillColor("#000000")
+        doc.text(`£${vatAmount.toFixed(2)}`, vatX, y, { width: 45, align: "right" })
+      } else {
+        doc.text("-", vatX, y, { width: 45, align: "right" })
       }
+
+      doc.text(`£${lineTotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
 
       y += 16
     })
+
+
 
     // Summary Section
     y += 10
@@ -708,22 +731,22 @@ export const exportOrderReceipt = async (req, res) => {
     doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(350, summaryTop).lineTo(555, summaryTop).stroke()
     y += 12
 
-    // Subtotal (Products only)
+    // Total VAT - Always show, even if 0 (BEFORE Subtotal)
     doc.fontSize(9)
-    doc.text("Subtotal:", 420, y, { width: 80, align: "right" })
-    doc.text(`£${subtotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+    const vatAmount = order.includeVAT ? totalVAT : 0
+    doc.text("Total VAT:", 420, y, { width: 80, align: "right" })
+    doc.text(`£${vatAmount.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
     y += 12
 
-    // VAT Breakdown (only for products)
-    if (order.includeVAT && totalVAT > 0) {
-      Object.entries(vatBreakdown).forEach(([rate, amount]) => {
-        if (amount > 0) {
-          doc.text(`VAT (${rate}%):`, 420, y, { width: 80, align: "right" })
-          doc.text(`£${Number(amount).toFixed(2)}`, totalX, y, { width: 60, align: "right" })
-          y += 12
-        }
-      })
-    }
+    // Subtotal (Products only - before VAT)
+    const subtotalBeforeVAT = order.lines.reduce((sum, line) => {
+      const lineTotal = (Number(line.qty) || 0) * (Number(line.price) || 0)
+      return sum + lineTotal
+    }, 0)
+
+    doc.text("Subtotal:", 420, y, { width: 80, align: "right" })
+    doc.text(`£${subtotalBeforeVAT.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+    y += 12
 
     // Delivery Cost - NO VAT
     if (order.deliveryCost && order.deliveryCost > 0) {

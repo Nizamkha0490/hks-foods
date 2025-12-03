@@ -101,8 +101,6 @@ export default function Orders() {
 
   const [formData, setFormData] = useState({
     clientId: "",
-    paymentMethod: "Bank Transfer" as string,
-    customPaymentMethod: "",
     deliveryCost: 0,
     includeDeliveryCost: true,
     includeVAT: true,
@@ -222,15 +220,8 @@ export default function Orders() {
     }
     setOrderType(typeMap[order.invoiceType] || 'By Invoice')
 
-    // Check if payment method is a standard one or custom
-    const standardMethods = ["Cash", "Card", "Online", "Cheque", "Credit"]
-    const orderPaymentMethod = order.paymentMethod || "Bank Transfer"
-    const isStandardMethod = standardMethods.includes(orderPaymentMethod)
-
     setFormData({
       clientId: order.clientId,
-      paymentMethod: isStandardMethod ? orderPaymentMethod : "Other",
-      customPaymentMethod: isStandardMethod ? "" : orderPaymentMethod,
       deliveryCost: order.deliveryCost || 0,
       includeDeliveryCost: !!(order.deliveryCost && order.deliveryCost > 0),
       includeVAT: order.includeVAT !== false,
@@ -354,13 +345,10 @@ export default function Orders() {
     try {
       setIsSubmitting(true)
 
-      const paymentMethod = formData.paymentMethod === "Other" ? formData.customPaymentMethod : formData.paymentMethod
-
       const requestBody = {
         clientId: formData.clientId,
         lines: formData.lines,
         status: formData.status,
-        paymentMethod,
         deliveryCost: formData.includeDeliveryCost ? formData.deliveryCost : 0,
         includeVAT: formData.includeVAT,
         type: orderType,
@@ -395,13 +383,11 @@ export default function Orders() {
 
     try {
       setIsUpdating(true)
-      const paymentMethod = formData.paymentMethod === "Other" ? formData.customPaymentMethod : formData.paymentMethod
 
       const requestBody = {
         clientId: formData.clientId,
         lines: formData.lines,
         status: formData.status,
-        paymentMethod,
         deliveryCost: formData.includeDeliveryCost ? formData.deliveryCost : 0,
         includeVAT: formData.includeVAT,
         type: orderType,
@@ -499,8 +485,6 @@ export default function Orders() {
   const resetForm = () => {
     setFormData({
       clientId: "",
-      paymentMethod: "Bank Transfer",
-      customPaymentMethod: "",
       deliveryCost: 0,
       includeDeliveryCost: true,
       includeVAT: true,
@@ -699,7 +683,7 @@ export default function Orders() {
 
       {/* Create Order Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-4xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between gap-4 mb-2">
               <DialogTitle>Create New Order</DialogTitle>
@@ -792,29 +776,7 @@ export default function Orders() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-kf-text-mid">Payment Method</Label>
-              <select
-                value={formData.paymentMethod}
-                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                className="w-full p-2 bg-muted border border-kf-border rounded-md text-sm"
-              >
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Online">Online</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Credit">Credit</option>
-                <option value="Other">Other</option>
-              </select>
-              {formData.paymentMethod === "Other" && (
-                <Input
-                  placeholder="Enter payment method"
-                  value={formData.customPaymentMethod}
-                  onChange={(e) => setFormData({ ...formData, customPaymentMethod: e.target.value })}
-                  className="bg-muted border-kf-border"
-                />
-              )}
-            </div>
+
 
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -880,7 +842,7 @@ export default function Orders() {
                     )}
                   </div>
                   {showProductDropdown && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-kf-border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-kf-border rounded-md shadow-lg z-50 max-h-96 overflow-y-auto">
                       {filteredProducts.length > 0 ? (
                         filteredProducts.map((product) => (
                           <button
@@ -968,7 +930,26 @@ export default function Orders() {
                             </div>
                           </td>
                           <td className="text-right">{line.qty}</td>
-                          <td className="text-right">£{line.price.toFixed(2)}</td>
+                          <td className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-sm">£</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={line.price}
+                                onChange={(e) => {
+                                  const newPrice = parseFloat(e.target.value) || 0
+                                  setFormData({
+                                    ...formData,
+                                    lines: formData.lines.map((l, i) =>
+                                      i === index ? { ...l, price: newPrice } : l
+                                    )
+                                  })
+                                }}
+                                className="w-20 text-right bg-muted border-kf-border h-8 px-2"
+                              />
+                            </div>
+                          </td>
                           <td className="text-right">£{lineTotal.toFixed(2)}</td>
                           <td className="text-center">
                             <Button
@@ -1019,7 +1000,7 @@ export default function Orders() {
 
       {/* Modify Order Dialog - FIXED: Client cannot be changed, only add products */}
       <Dialog open={isModifyOpen} onOpenChange={setIsModifyOpen}>
-        <DialogContent className="max-w-4xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between gap-4 mb-2">
               <DialogTitle>Modify Order</DialogTitle>
@@ -1074,29 +1055,7 @@ export default function Orders() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-kf-text-mid">Payment Method</Label>
-              <select
-                value={formData.paymentMethod}
-                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                className="w-full p-2 bg-muted border border-kf-border rounded-md text-sm"
-              >
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Online">Online</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Credit">Credit</option>
-                <option value="Other">Other</option>
-              </select>
-              {formData.paymentMethod === "Other" && (
-                <Input
-                  placeholder="Enter payment method"
-                  value={formData.customPaymentMethod}
-                  onChange={(e) => setFormData({ ...formData, customPaymentMethod: e.target.value })}
-                  className="bg-muted border-kf-border"
-                />
-              )}
-            </div>
+
 
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -1163,7 +1122,7 @@ export default function Orders() {
                     )}
                   </div>
                   {showProductDropdown && filteredProducts.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-kf-border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-kf-border rounded-md shadow-lg z-50 max-h-96 overflow-y-auto">
                       {filteredProducts.map((product) => (
                         <button
                           key={product._id}
@@ -1244,7 +1203,26 @@ export default function Orders() {
                             </div>
                           </td>
                           <td className="text-right">{line.qty}</td>
-                          <td className="text-right">£{line.price.toFixed(2)}</td>
+                          <td className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-sm">£</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={line.price}
+                                onChange={(e) => {
+                                  const newPrice = parseFloat(e.target.value) || 0
+                                  setFormData({
+                                    ...formData,
+                                    lines: formData.lines.map((l, i) =>
+                                      i === index ? { ...l, price: newPrice } : l
+                                    )
+                                  })
+                                }}
+                                className="w-20 text-right bg-muted border-kf-border h-8 px-2"
+                              />
+                            </div>
+                          </td>
                           <td className="text-right">£{lineTotal.toFixed(2)}</td>
                           <td className="text-center">
                             <Button
@@ -1321,10 +1299,7 @@ export default function Orders() {
                     <p className="text-sm text-muted-foreground">Status</p>
                     <Badge className="capitalize">{selectedOrder.status.replace("_", " ")}</Badge>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Payment Method</p>
-                    <p className="font-semibold">{selectedOrder.paymentMethod || "-"}</p>
-                  </div>
+
                   {selectedOrder.deliveryCost && (
                     <div>
                       <p className="text-sm text-muted-foreground">Delivery Cost</p>
