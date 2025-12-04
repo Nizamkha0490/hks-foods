@@ -5,6 +5,11 @@ import Settings from "../models/Settings.js"
 import CreditNote from "../models/CreditNote.js"
 import PDFDocument from "pdfkit"
 import { asyncHandler } from "../middleware/errorHandler.js"
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // GET ALL ORDERS (owner-only)
 export const getOrders = asyncHandler(async (req, res) => {
@@ -625,7 +630,7 @@ export const exportOrderReceipt = async (req, res) => {
 
     // Add Company Stamp to the right of ORDER INFORMATION
     try {
-      const stampPath = "C:/Users/Nizam/.gemini/antigravity/brain/3f8a61c8-5389-4bba-8dcf-c5d0048950f5/uploaded_image_1_1764803609762.png"
+      const stampPath = path.join(__dirname, '../assets/paid_stamp.png')
       const stampX = 460  // Right side position
       const stampY = detailsY - 20
       const stampWidth = 80
