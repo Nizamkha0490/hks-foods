@@ -59,4 +59,8 @@ const supplierSchema = new mongoose.Schema(
 
 supplierSchema.index({ name: "text", email: "text", phone: "text" });
 
+// Performance indexes
+supplierSchema.index({ userId: 1, isActive: 1 }); // Fast active suppliers lookup
+supplierSchema.index({ userId: 1, totalCredit: -1 }); // Fast sorting by credit
+
 export default mongoose.model("Supplier", supplierSchema);

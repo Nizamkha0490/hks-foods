@@ -19,8 +19,8 @@ export const getOrders = asyncHandler(async (req, res) => {
 
   try {
     const orders = await Order.find({ userId: req.admin._id })
-      .populate("clientId")
-      .populate("lines.productId")
+      .populate("clientId", "name email") // Only select name and email
+      .populate("lines.productId", "name vat") // Only select name and vat
       .sort({ createdAt: -1 })
 
     res.json({
@@ -75,8 +75,8 @@ export const getCreditNotesByClient = asyncHandler(async (req, res) => {
       userId: req.admin._id,
       status: { $in: ["cancelled", "returned"] },
     })
-      .populate("clientId")
-      .populate("lines.productId")
+      .populate("clientId", "name email") // Only select name and email
+      .populate("lines.productId", "name vat") // Only select name and vat
       .sort({ createdAt: -1 })
 
     res.json({
@@ -100,8 +100,8 @@ export const getInvoicesByClient = asyncHandler(async (req, res) => {
 
   try {
     const invoices = await Order.find({ clientId: req.params.clientId, userId: req.admin._id })
-      .populate("clientId")
-      .populate("lines.productId")
+      .populate("clientId", "name email") // Only select name and email
+      .populate("lines.productId", "name vat") // Only select name and vat
       .sort({ createdAt: -1 })
 
     res.json({
@@ -125,8 +125,8 @@ export const getOrder = asyncHandler(async (req, res) => {
 
   try {
     const order = await Order.findOne({ _id: req.params.id, userId: req.admin._id })
-      .populate("clientId")
-      .populate("lines.productId")
+      .populate("clientId", "name email phone address") // Only select required fields
+      .populate("lines.productId", "name vat unit") // Only select required fields
 
     if (!order) {
       return res.status(404).json({
@@ -173,10 +173,15 @@ export const createOrder = asyncHandler(async (req, res) => {
       })
     }
 
-    // Validate stock availability and calculate total
+    // Validate stock availability and calculate total - OPTIMIZED: Batch product lookup
     let total = 0
+    const productIds = lines.map(line => line.productId)
+    const products = await Product.find({ _id: { $in: productIds } })
+    const productMap = new Map(products.map(p => [p._id.toString(), p]))
+
+    // Validate all products exist and have sufficient stock
     for (const line of lines) {
-      const product = await Product.findById(line.productId)
+      const product = productMap.get(line.productId.toString())
       if (!product) {
         return res.status(400).json({
           success: false,
@@ -200,17 +205,16 @@ export const createOrder = asyncHandler(async (req, res) => {
       }
 
       total += lineTotal
-
-      // Reduce stock
-      if (product.reduceStock) {
-        await product.reduceStock(line.qty)
-      } else {
-        // Fallback: manually reduce stock
-        await Product.findByIdAndUpdate(line.productId, {
-          $inc: { stock: -line.qty },
-        })
-      }
     }
+
+    // Batch stock reduction - OPTIMIZED: Use bulkWrite instead of individual updates
+    const bulkOps = lines.map(line => ({
+      updateOne: {
+        filter: { _id: line.productId },
+        update: { $inc: { stock: -line.qty } }
+      }
+    }))
+    await Product.bulkWrite(bulkOps)
 
     if (deliveryCost) {
       total += deliveryCost
@@ -279,36 +283,49 @@ export const updateOrder = asyncHandler(async (req, res) => {
     }
 
     if (lines && lines.length > 0) {
-      // Restore stock from old lines
-      for (const oldLine of existingOrder.lines) {
-        const product = await Product.findById(oldLine.productId)
-        if (product) {
-          await product.restoreStock(oldLine.qty)
-        }
-      }
+      // STEP 1: Validate new lines FIRST (before touching stock)
+      const newProductIds = lines.map(line => line.productId)
+      const newProducts = await Product.find({ _id: { $in: newProductIds } })
+      const newProductMap = new Map(newProducts.map(p => [p._id.toString(), p]))
 
-      // Validate new lines
       for (const newLine of lines) {
-        const product = await Product.findById(newLine.productId)
+        const product = newProductMap.get(newLine.productId.toString())
         if (!product) {
           return res.status(400).json({
             success: false,
             message: `Product not found: ${newLine.productId}`,
           })
         }
-        if (product.stock < newLine.qty) {
+        // Check stock AFTER restoring old stock (product.stock + oldQty - newQty >= 0)
+        const oldLine = existingOrder.lines.find(l => l.productId.toString() === newLine.productId.toString())
+        const oldQty = oldLine ? oldLine.qty : 0
+        const availableStock = product.stock + oldQty
+
+        if (availableStock < newLine.qty) {
           return res.status(400).json({
             success: false,
-            message: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${newLine.qty}`,
+            message: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${newLine.qty}`,
           })
         }
       }
 
-      // Reduce stock for new lines
-      for (const newLine of lines) {
-        const product = await Product.findById(newLine.productId)
-        await product.reduceStock(newLine.qty)
-      }
+      // STEP 2: Now safe to modify stock - restore old stock
+      const oldBulkOps = existingOrder.lines.map(line => ({
+        updateOne: {
+          filter: { _id: line.productId },
+          update: { $inc: { stock: line.qty } }
+        }
+      }))
+      await Product.bulkWrite(oldBulkOps)
+
+      // STEP 3: Reduce stock for new lines
+      const newBulkOps = lines.map(line => ({
+        updateOne: {
+          filter: { _id: line.productId },
+          update: { $inc: { stock: -line.qty } }
+        }
+      }))
+      await Product.bulkWrite(newBulkOps)
     }
 
     const updateFields = {}
@@ -319,13 +336,18 @@ export const updateOrder = asyncHandler(async (req, res) => {
     if (deliveryCost !== undefined) updateFields.deliveryCost = deliveryCost
     if (includeVAT !== undefined) updateFields.includeVAT = includeVAT
 
-    // Recalculate total
+    // Recalculate total - OPTIMIZED: Batch product lookup
     let calculatedTotal = 0
     const linesToUse = lines || existingOrder.lines
     const useVAT = includeVAT !== undefined ? includeVAT : existingOrder.includeVAT
 
+    // Batch fetch products for VAT calculation
+    const productIds = linesToUse.map(line => line.productId)
+    const products = await Product.find({ _id: { $in: productIds } })
+    const productMap = new Map(products.map(p => [p._id.toString(), p]))
+
     for (const line of linesToUse) {
-      const product = await Product.findById(line.productId)
+      const product = productMap.get(line.productId.toString())
       if (product) {
         let lineTotal = line.qty * line.price
 
@@ -489,12 +511,14 @@ export const deleteOrder = asyncHandler(async (req, res) => {
       })
     }
 
-    for (const line of order.lines) {
-      const product = await Product.findById(line.productId)
-      if (product) {
-        await product.restoreStock(line.qty)
+    // OPTIMIZED: Batch restore stock using bulkWrite
+    const bulkOps = order.lines.map(line => ({
+      updateOne: {
+        filter: { _id: line.productId },
+        update: { $inc: { stock: line.qty } }
       }
-    }
+    }))
+    await Product.bulkWrite(bulkOps)
 
     await Order.findOneAndDelete({ _id: orderId, userId: req.admin._id })
 

@@ -98,4 +98,11 @@ productSchema.methods.restoreStock = function (quantity) {
 // Index for search
 productSchema.index({ name: "text", serialNo: "text", category: "text" })
 
+// Performance indexes
+productSchema.index({ userId: 1, isActive: 1 }); // Fast active products lookup
+productSchema.index({ userId: 1, stock: 1 }); // Fast low stock queries
+productSchema.index({ supplier: 1, userId: 1 }); // Fast supplier products lookup
+productSchema.index({ userId: 1, category: 1 }); // Fast category filtering
+
+
 export default mongoose.model("Product", productSchema, "products");

@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
 import { Badge } from "@/components/ui/badge"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { toast } from "sonner"
 
 interface BackendProduct {
@@ -93,7 +93,8 @@ export default function Dashboard() {
     };
   }
 
-  const getClientName = (clientId: string) => {
+  // Memoize getClientName to prevent recreation on every render
+  const getClientName = useCallback((clientId: string) => {
     if (!clientId) return "Unknown Client";
     const found = clients.find((c) => c._id === clientId);
     if (found) return found.name;
@@ -102,7 +103,7 @@ export default function Dashboard() {
     if (cachedOrder) return cachedOrder.clientName || "Deleted Client";
 
     return "Deleted Client";
-  };
+  }, [clients, recentOrders]);
 
   const generateSalesData = (orders: BackendOrder[], range: "daily" | "monthly") => {
     const currentYear = new Date().getFullYear();

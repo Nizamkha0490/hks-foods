@@ -38,4 +38,9 @@ const clientSchema = new mongoose.Schema(
 
 clientSchema.index({ name: "text", email: "text" })
 
+// Performance indexes
+clientSchema.index({ userId: 1, isActive: 1 }); // Fast active clients lookup
+clientSchema.index({ userId: 1, totalDues: -1 }); // Fast sorting by balance
+clientSchema.index({ email: 1, userId: 1 }); // Fast email lookup
+
 export default mongoose.model("Client", clientSchema, "clients")

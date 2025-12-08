@@ -50,13 +50,18 @@ const adminSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Database indexes for performance
+adminSchema.index({ email: 1, isActive: 1 }); // Fast login lookup
+adminSchema.index({ userId: 1 }); // Fast user queries
+
+
 adminSchema.pre("save", async function (next) {
   if (this.isNew) {
     this.userId = this._id;
   }
   if (!this.isModified("password")) return next();
   try {
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(8); // Reduced from 10 to 8 for 4x faster hashing
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {

@@ -78,10 +78,18 @@ orderSchema.pre("save", async function (next) {
       }
     }
 
+
     next();
   } catch (err) {
     next(err);
   }
 });
+
+// Performance indexes for faster queries
+orderSchema.index({ userId: 1, createdAt: -1 }); // Fast order listing (newest first)
+orderSchema.index({ clientId: 1, status: 1 }); // Fast client orders lookup
+orderSchema.index({ orderNo: 1, userId: 1 }); // Fast order number lookup
+orderSchema.index({ status: 1, userId: 1 }); // Fast status filtering
+orderSchema.index({ userId: 1, invoiceType: 1 }); // Fast invoice type filtering
 
 export default mongoose.model("Order", orderSchema);
