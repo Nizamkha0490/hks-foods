@@ -572,6 +572,9 @@ export const exportOrderReceipt = async (req, res) => {
 
     // Fetch settings
     const settings = await Settings.findOne({ userId: req.admin._id })
+    console.log('📄 PDF GENERATION - Settings fetched');
+    console.log('📄 accountNumber:', settings?.accountNumber);
+    console.log('📄 sortCode:', settings?.sortCode);
 
     // Company Name and Details - Centered
     doc
@@ -773,6 +776,29 @@ export const exportOrderReceipt = async (req, res) => {
     doc.text(`£${subtotalBeforeVAT.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
     y += 12
 
+    // Calculate order total (before previous balance) for use in previous balance calculation
+    const orderTotal = subtotal + (Number(order.deliveryCost) || 0)
+
+    // Previous Balance - Calculate based on order type
+    const clientTotalDues = client?.totalDues || 0
+    let previousBalance = 0
+
+    // If this is an on_account order, the current order total is already in totalDues
+    // So we need to subtract it to show only the previous balance
+    if (order.invoiceType === 'on_account') {
+      previousBalance = clientTotalDues - orderTotal
+    } else {
+      // For other payment types, show the full totalDues as previous balance
+      previousBalance = clientTotalDues
+    }
+
+    // Only show previous balance if it exists and is greater than 0
+    if (previousBalance > 0) {
+      doc.text("Previous Balance:", 420, y, { width: 80, align: "right" })
+      doc.text(`£${previousBalance.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+      y += 12
+    }
+
     // Delivery Cost - NO VAT
     if (order.deliveryCost && order.deliveryCost > 0) {
       const deliveryTotal = Number(order.deliveryCost) // No VAT on delivery
@@ -782,13 +808,13 @@ export const exportOrderReceipt = async (req, res) => {
       y += 12
     }
 
-    // Total - Includes both products and delivery
+    // Total - Includes products, delivery, and previous balance
     doc.fontSize(10).font("Helvetica-Bold")
     doc.strokeColor("#1e3a8a").lineWidth(1).moveTo(350, y).lineTo(555, y).stroke()
     y += 8
 
-    // Calculate final total including delivery
-    const finalTotal = subtotal + (Number(order.deliveryCost) || 0)
+    // Calculate final total including delivery and previous balance
+    const finalTotal = orderTotal + (previousBalance > 0 ? previousBalance : 0)
     doc.text("TOTAL:", 420, y, { width: 80, align: "right" })
     doc.text(`£${finalTotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
 
@@ -808,8 +834,8 @@ export const exportOrderReceipt = async (req, res) => {
     // Bottom separator line
     doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(40, footerY).lineTo(555, footerY).stroke()
 
-    // Footer content
-    const footerContentY = footerY + 8
+    // Footer content - moved down for better spacing
+    const footerContentY = footerY + 12
 
     // Left - Generation info
     doc
@@ -820,14 +846,19 @@ export const exportOrderReceipt = async (req, res) => {
         footerContentY,
       )
 
-    // Center - Company info
-    doc.text(`HKS Foods Ltd | VAT NUMBER: ${settings?.vatNumber || "495814839"} | Company No: 16372393`, { align: "center" })
+    // Center - Company info with account details
+    const accountInfo = []
+    if (settings?.accountNumber) accountInfo.push(`Account No: ${settings.accountNumber}`)
+    if (settings?.sortCode) accountInfo.push(`Sort Code: ${settings.sortCode}`)
+    const accountLine = accountInfo.length > 0 ? ` | ${accountInfo.join(' | ')}` : ''
+    doc.text(`HKS Foods Ltd | VAT NUMBER: ${settings?.vatNumber || "495814839"} | Company No: ${settings?.companyNumber || "16372393"}${accountLine}`, { align: "center" })
 
     // Right - Page info
     doc.text("Page 1 of 1", 515, footerContentY, { align: "right" })
 
-    // VAT info on second line
-    doc.text("VAT Registration No: 495814839", { align: "center" })
+    // VAT info on second line - also moved down
+    const footerSecondLineY = footerContentY + 10
+    doc.text("VAT Registration No: 495814839", 40, footerSecondLineY, { align: "center" })
 
     doc.end()
   } catch (error) {

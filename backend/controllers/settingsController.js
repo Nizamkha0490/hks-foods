@@ -10,7 +10,7 @@ import Expense from "../models/Expense.js"
 
 export const getSettings = async (req, res) => {
   console.log('🔧 GET SETTINGS - Request received');
-  
+
   if (!req.admin || !req.admin._id) {
     return res.status(401).json({ message: "Unauthorized" })
   }
@@ -20,7 +20,7 @@ export const getSettings = async (req, res) => {
     if (!settings) {
       settings = await Settings.create({ userId: req.admin._id })
     }
-    
+
     console.log('✅ GET SETTINGS - Success');
     res.json(settings)
   } catch (error) {
@@ -31,13 +31,13 @@ export const getSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
   console.log('🔧 UPDATE SETTINGS - Request received');
-  
+
   if (!req.admin || !req.admin._id) {
     return res.status(401).json({ message: "Unauthorized" })
   }
 
   try {
-    const { warehouseName, address, city, postalCode, contactNumber, email, currency, taxRate, businessRegistration, vatNumber, companyNumber } =
+    const { warehouseName, address, city, postalCode, contactNumber, email, currency, taxRate, businessRegistration, vatNumber, companyNumber, accountNumber, sortCode } =
       req.body
 
     let settings = await Settings.findOne({ userId: req.admin._id })
@@ -56,10 +56,14 @@ export const updateSettings = async (req, res) => {
     if (businessRegistration) settings.businessRegistration = businessRegistration
     if (vatNumber) settings.vatNumber = vatNumber
     if (companyNumber) settings.companyNumber = companyNumber
+    if (accountNumber !== undefined) settings.accountNumber = accountNumber
+    if (sortCode !== undefined) settings.sortCode = sortCode
 
     await settings.save()
 
     console.log('✅ UPDATE SETTINGS - Success');
+    console.log('📝 Saved accountNumber:', settings.accountNumber);
+    console.log('📝 Saved sortCode:', settings.sortCode);
 
     res.json({
       message: "Settings updated successfully",
@@ -74,7 +78,7 @@ export const updateSettings = async (req, res) => {
 // Change password
 export const changePassword = async (req, res) => {
   console.log('🔧 CHANGE PASSWORD - Request received');
-  
+
   if (!req.admin || !req.admin._id) {
     return res.status(401).json({ message: "Unauthorized" })
   }
@@ -117,7 +121,7 @@ export const changePassword = async (req, res) => {
 // Create backup
 export const createBackup = async (req, res) => {
   console.log('🔧 CREATE BACKUP - Request received');
-  
+
   if (!req.admin || !req.admin._id) {
     return res.status(401).json({ message: "Unauthorized" })
   }

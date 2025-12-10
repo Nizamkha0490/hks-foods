@@ -26,6 +26,14 @@ const settingsSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    accountNumber: {
+      type: String,
+      default: "",
+    },
+    sortCode: {
+      type: String,
+      default: "",
+    },
     contactNumber: {
       type: String,
       default: "+44 20 1234 5678",
@@ -50,8 +58,8 @@ const settingsSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
   },
   { timestamps: true },
 )
