@@ -549,7 +549,7 @@ export const exportOrderReceipt = async (req, res) => {
     const doc = new PDFDocument({ margin: 40, size: "A4" })
 
     res.setHeader("Content-Type", "application/pdf")
-    res.setHeader("Content-Disposition", `attachment; filename=receipt-${order.orderNo}.pdf`)
+    res.setHeader("Content-Disposition", `attachment; filename="receipt-${order.orderNo}.pdf"`)
 
     doc.pipe(res)
 
@@ -572,9 +572,7 @@ export const exportOrderReceipt = async (req, res) => {
 
     // Fetch settings
     const settings = await Settings.findOne({ userId: req.admin._id })
-    console.log('📄 PDF GENERATION - Settings fetched');
-    console.log('📄 accountNumber:', settings?.accountNumber);
-    console.log('📄 sortCode:', settings?.sortCode);
+
 
     // Company Name and Details - Centered
     doc
@@ -846,19 +844,20 @@ export const exportOrderReceipt = async (req, res) => {
         footerContentY,
       )
 
-    // Center - Company info with account details
+    // Center - Company info
+    doc.text(`HKS Foods Ltd | VAT Reg No: ${settings?.vatNumber || "495814839"} | Company No: ${settings?.companyNumber || "16372393"}`, 0, footerContentY, { align: "center" })
+
+    // Account details on next line
     const accountInfo = []
     if (settings?.accountNumber) accountInfo.push(`Account No: ${settings.accountNumber}`)
     if (settings?.sortCode) accountInfo.push(`Sort Code: ${settings.sortCode}`)
-    const accountLine = accountInfo.length > 0 ? ` | ${accountInfo.join(' | ')}` : ''
-    doc.text(`HKS Foods Ltd | VAT NUMBER: ${settings?.vatNumber || "495814839"} | Company No: ${settings?.companyNumber || "16372393"}${accountLine}`, { align: "center" })
+
+    if (accountInfo.length > 0) {
+      doc.text(accountInfo.join(' | '), 0, footerContentY + 10, { align: "center" })
+    }
 
     // Right - Page info
     doc.text("Page 1 of 1", 515, footerContentY, { align: "right" })
-
-    // VAT info on second line - also moved down
-    const footerSecondLineY = footerContentY + 10
-    doc.text("VAT Registration No: 495814839", 40, footerSecondLineY, { align: "center" })
 
     doc.end()
   } catch (error) {

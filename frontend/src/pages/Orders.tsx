@@ -108,6 +108,9 @@ export default function Orders() {
     lines: [] as OrderLine[],
   })
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+
   const [selectedProductId, setSelectedProductId] = useState("")
   const [selectedProductQty, setSelectedProductQty] = useState("1")
 
@@ -133,6 +136,10 @@ export default function Orders() {
   useEffect(() => {
     fetchData()
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [orderSearch])
 
   // Utility functions
   const getClientName = (clientId: string) => {
@@ -354,7 +361,7 @@ export default function Orders() {
         type: orderType,
       }
 
-      console.log("[v0] Creating order with payload:", requestBody)
+
 
       const response = await api.post("/orders", requestBody)
 
@@ -508,8 +515,9 @@ export default function Orders() {
       const blob = new Blob([response.data], { type: "application/pdf" })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
+      const filename = `receipt-${order.invoiceNo || order.orderNo}.pdf`
       link.href = url
-      link.setAttribute("download", `receipt-${order.orderNo}.pdf`)
+      link.download = filename // Use property instead of setAttribute
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -611,7 +619,7 @@ export default function Orders() {
             </TableHeader>
 
             <TableBody>
-              {filteredOrders.map((order) => (
+              {filteredOrders.slice((currentPage - 1) * 20, currentPage * 20).map((order) => (
                 <TableRow key={order._id}>
                   <TableCell>{order.invoiceNo || order.orderNo}</TableCell>
                   <TableCell>{order.invoiceType}</TableCell>
@@ -668,7 +676,7 @@ export default function Orders() {
                 </TableRow>
               ))}
 
-              {sortedOrders.length === 0 && ( // ✅ FIXED: Use sortedOrders here too
+              {filteredOrders.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="py-8 px-4 text-center text-kf-text-mid">
                     No orders found. Click "Create Order" to get started.
@@ -677,6 +685,29 @@ export default function Orders() {
               )}
             </TableBody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-end space-x-2 py-4 border-t border-kf-border mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <div className="text-sm text-kf-text-mid">
+            Page {currentPage} of {Math.max(1, Math.ceil(filteredOrders.length / 20))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filteredOrders.length / 20), p + 1))}
+            disabled={currentPage >= Math.ceil(filteredOrders.length / 20)}
+          >
+            Next
+          </Button>
         </div>
       </Card>
 
