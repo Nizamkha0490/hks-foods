@@ -84,6 +84,18 @@ export default function SupplierProfile() {
   const [isPaymentListOpen, setIsPaymentListOpen] = useState(false)
   const [payments, setPayments] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [viewMode, setViewMode] = useState<'goods' | 'invoices'>('goods')
+
+  const [isAddInvoiceOpen, setIsAddInvoiceOpen] = useState(false)
+  const [invoiceFormData, setInvoiceFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    invoiceNo: "",
+    netAmount: "",
+    vatAmount: "",
+    description: "",
+    paymentMethod: "", // Default empty or "Bank"? User said optional.
+    otherPaymentMethod: "",
+  })
 
   const handleAddItem = () => {
     setRecordGoodsFormData({
@@ -127,19 +139,97 @@ export default function SupplierProfile() {
     }
   }
 
+  // State for Modify Invoice
+  const [isModifyInvoiceOpen, setIsModifyInvoiceOpen] = useState(false)
+  const [modifyInvoiceFormData, setModifyInvoiceFormData] = useState({
+    date: "",
+    invoiceNo: "",
+    netAmount: "",
+    vatAmount: "",
+    description: "",
+    paymentMethod: "",
+    otherPaymentMethod: "",
+  })
+
+  // Open appropriate dialog based on transaction type
   const openModifyTransactionDialog = (transaction: Transaction) => {
     setSelectedTransaction(transaction)
-    setModifyFormData({
-      dateReceived: new Date(transaction.createdAt).toISOString().split('T')[0],
-      notes: "", // Assuming notes are not in transaction for now, or fetch if needed
-      items: transaction.items?.map(item => ({
-        productId: item.productId,
-        productName: item.productName,
-        qty: item.qty,
-        unitPrice: item.unitPrice
-      })) || []
-    })
-    setIsModifyTransactionOpen(true)
+
+    // Check if it's likely an invoice (has paymentMethod or single item with potential Invoice name)
+    // Strongest signal: paymentMethod field is present in the record (if we fetch it)
+    // For now, let's assume if it has paymentMethod, use Modify Invoice. 
+    // If not, fall back to Modify Goods. 
+    // Note: Transaction interface might need update to include paymentMethod if not already there.
+    // The previous view of code showed Transaction interface having paymentMethod: string.
+
+    if (transaction.paymentMethod) {
+      // It's an invoice
+      setModifyInvoiceFormData({
+        date: new Date(transaction.createdAt).toISOString().split('T')[0],
+        invoiceNo: "", // Can't easily recover invoiceNo from purchaseOrderNo if it wasn't saved separately unless looking at transaction.invoiceNo? 
+        // Wait, transaction interface might need invoiceNo? 
+        // Let's assume transaction is the Purchase object which has invoiceNo.
+        // Check if transaction has invoiceNo currently in interface? 
+        // In SupplierProfile.tsx interface Transaction:
+        // _id, purchaseOrderNo, createdAt,status, totalAmount, paymentMethod, items
+        // It missed invoiceNo. I should check if API returns it. 
+        // The API returns 'purchases' from getPurchasesForSupplier. 
+        // Purchase model has invoiceNo. So it should be there.
+        // Let's cast or update interface. 
+        invoiceNo: (transaction as any).invoiceNo || "",
+        netAmount: (transaction.items && transaction.items.length > 0) ? transaction.items[0].unitPrice.toString() : "",
+        vatAmount: (transaction as any).vatAmount ? (transaction as any).vatAmount.toString() : "0",
+        description: (transaction as any).notes || "",
+        paymentMethod: ["Bank", "Cash"].includes(transaction.paymentMethod) ? transaction.paymentMethod : "Other",
+        otherPaymentMethod: ["Bank", "Cash"].includes(transaction.paymentMethod) ? "" : transaction.paymentMethod
+      })
+      setIsModifyInvoiceOpen(true)
+    } else {
+      // It's traditional Record Goods
+      setModifyFormData({
+        dateReceived: new Date(transaction.createdAt).toISOString().split('T')[0],
+        notes: "",
+        items: transaction.items?.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          qty: item.qty,
+          unitPrice: item.unitPrice
+        })) || []
+      })
+      setIsModifyTransactionOpen(true)
+    }
+  }
+
+  const handleUpdateInvoice = async () => {
+    if (!selectedTransaction || !id) return
+    if (!modifyInvoiceFormData.netAmount) {
+      toast.error("Net Value is required")
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const payload = {
+        dateReceived: modifyInvoiceFormData.date,
+        invoiceNo: modifyInvoiceFormData.invoiceNo,
+        netAmount: parseFloat(modifyInvoiceFormData.netAmount),
+        vatAmount: parseFloat(modifyInvoiceFormData.vatAmount) || 0,
+        notes: modifyInvoiceFormData.description,
+        paymentMethod: modifyInvoiceFormData.paymentMethod === "Other"
+          ? modifyInvoiceFormData.otherPaymentMethod
+          : modifyInvoiceFormData.paymentMethod
+      }
+
+      await api.put(`/suppliers/${id}/invoice/${selectedTransaction._id}`, payload)
+      setIsModifyInvoiceOpen(false)
+      fetchSupplierProfile()
+      toast.success("Invoice updated successfully")
+    } catch (error: any) {
+      console.error("Error updating invoice:", error)
+      toast.error(error.response?.data?.message || "Error updating invoice")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleModifyItemChange = (index: number, field: string, value: any) => {
@@ -244,6 +334,51 @@ export default function SupplierProfile() {
       setSubmitting(false);
     }
   };
+
+  const handleClearInvoiceFields = () => {
+    setInvoiceFormData({
+      date: new Date().toISOString().split('T')[0],
+      invoiceNo: "",
+      netAmount: "",
+      vatAmount: "",
+      description: "",
+      paymentMethod: "",
+      otherPaymentMethod: "",
+    })
+  }
+
+  const handleAddInvoice = async () => {
+    if (!id) return
+    if (!invoiceFormData.netAmount) {
+      toast.error("Net Value is required")
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const payload = {
+        dateReceived: invoiceFormData.date,
+        invoiceNo: invoiceFormData.invoiceNo,
+        netAmount: parseFloat(invoiceFormData.netAmount),
+        vatAmount: parseFloat(invoiceFormData.vatAmount) || 0,
+        notes: invoiceFormData.description,
+        paymentMethod: invoiceFormData.paymentMethod === "Other"
+          ? invoiceFormData.otherPaymentMethod
+          : invoiceFormData.paymentMethod
+      }
+
+      await api.post(`/suppliers/${id}/invoice`, payload)
+      setIsAddInvoiceOpen(false)
+      handleClearInvoiceFields()
+      fetchSupplierProfile()
+      toast.success("Invoice recorded successfully")
+    } catch (error: any) {
+      console.error("Error recording invoice:", error)
+      toast.error(error.response?.data?.message || "Error recording invoice")
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     const fetchSupplierProfile = async () => {
@@ -386,11 +521,19 @@ export default function SupplierProfile() {
   }
 
   const filteredTransactions = transactions.filter(t => {
+    // Filter by view mode first
+    const isInvoice = !!t.paymentMethod
+    if (viewMode === 'goods' && isInvoice) return false
+    if (viewMode === 'invoices' && !isInvoice) return false
+
     if (!searchTerm) return true
     const searchLower = searchTerm.toLowerCase()
 
     // Check PO-ID
-    if (t.purchaseOrderNo.toLowerCase().includes(searchLower)) return true
+    if (t.purchaseOrderNo && t.purchaseOrderNo.toLowerCase().includes(searchLower)) return true
+
+    // Check Invoice No
+    if ((t as any).invoiceNo && (t as any).invoiceNo.toLowerCase().includes(searchLower)) return true
 
     // Check Product Names in items
     if (t.items?.some(item => item.productName.toLowerCase().includes(searchLower))) return true
@@ -445,6 +588,12 @@ export default function SupplierProfile() {
               Record Goods
             </Button>
             <Button
+              variant="outline"
+              onClick={() => setIsAddInvoiceOpen(true)}
+            >
+              Add New Invoice
+            </Button>
+            <Button
               className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setIsPaymentOpen(true)}
             >
@@ -462,16 +611,47 @@ export default function SupplierProfile() {
           </div>
         </div>
 
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={viewMode === 'goods' ? 'default' : 'outline'}
+            onClick={() => setViewMode('goods')}
+            className={viewMode === 'goods' ? "bg-kf-purple text-white" : ""}
+          >
+            Record Goods
+          </Button>
+          <Button
+            variant={viewMode === 'invoices' ? 'default' : 'outline'}
+            onClick={() => setViewMode('invoices')}
+            className={viewMode === 'invoices' ? "bg-kf-purple text-white" : ""}
+          >
+            Invoices
+          </Button>
+        </div>
+
         <div className="overflow-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-kf-border">
-                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">PO-ID</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Date</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Product</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Quantity</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Unit Price</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Total</th>
+                {viewMode === 'goods' ? (
+                  <>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">PO-ID</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Product</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Quantity</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Unit Price</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Total</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Invoice No</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Description</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Net Amount</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">VAT Amount</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Total</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Payment Method</th>
+                  </>
+                )}
                 <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Actions</th>
               </tr>
             </thead>
@@ -481,36 +661,67 @@ export default function SupplierProfile() {
                   key={transaction._id}
                   className="border-b border-kf-border hover:bg-kf-sidebar-hover transition-colors"
                 >
-                  <td className="py-3 px-4 text-sm text-kf-text-dark font-medium">{transaction.purchaseOrderNo}</td>
-                  <td className="py-3 px-4 text-sm text-kf-text-dark">
-                    {new Date(transaction.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-kf-text-dark">
-                    <div className="space-y-1">
-                      {transaction.items?.map((item, idx) => (
-                        <div key={idx}>{item.productName}</div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-kf-text-dark">
-                    <div className="space-y-1">
-                      {transaction.items?.map((item, idx) => (
-                        <div key={idx}>{item.qty}</div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-kf-text-dark">
-                    <div className="space-y-1">
-                      {transaction.items?.map((item, idx) => (
-                        <div key={idx}>
-                          {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(item.unitPrice)}
+                  {viewMode === 'goods' ? (
+                    <>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark font-medium">{transaction.purchaseOrderNo}</td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        {new Date(transaction.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        <div className="space-y-1">
+                          {transaction.items?.map((item, idx) => (
+                            <div key={idx}>{item.productName}</div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-kf-text-mid">
-                    {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(transaction.totalAmount || 0)}
-                  </td>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        <div className="space-y-1">
+                          {transaction.items?.map((item, idx) => (
+                            <div key={idx}>{item.qty}</div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        <div className="space-y-1">
+                          {transaction.items?.map((item, idx) => (
+                            <div key={idx}>
+                              {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(item.unitPrice)}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-mid">
+                        {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(transaction.totalAmount || 0)}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        {new Date((transaction as any).dateReceived || transaction.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark font-medium">{(transaction as any).invoiceNo || "-"}</td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark max-w-[200px] truncate">
+                        {(transaction as any).notes || transaction.items?.[0]?.productName || "-"}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(
+                          (transaction.items?.[0]?.unitPrice) || 0
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(
+                          (transaction as any).vatAmount || 0
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-mid font-semibold">
+                        {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(transaction.totalAmount || 0)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-kf-text-dark">
+                        {transaction.paymentMethod}
+                      </td>
+                    </>
+                  )}
+
                   <td className="py-3 px-4">
                     <div className="flex gap-2">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModifyTransactionDialog(transaction)}>
@@ -716,6 +927,250 @@ export default function SupplierProfile() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isAddInvoiceOpen} onOpenChange={setIsAddInvoiceOpen}>
+        <DialogContent className="max-w-2xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-kf-text-dark">Add New Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-kf-background p-3 rounded-lg border border-kf-border">
+              <p className="text-sm text-kf-text-mid">Supplier</p>
+              <p className="font-semibold text-kf-text-dark">{supplier?.name}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Date</Label>
+                <Input
+                  type="date"
+                  value={invoiceFormData.date}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, date: e.target.value })}
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Invoice Number</Label>
+                <Input
+                  value={invoiceFormData.invoiceNo}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, invoiceNo: e.target.value })}
+                  placeholder="Invoice #"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Net Value (£)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={invoiceFormData.netAmount}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, netAmount: e.target.value })}
+                  placeholder="0.00"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">VAT Value (£)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={invoiceFormData.vatAmount}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, vatAmount: e.target.value })}
+                  placeholder="0.00"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-kf-text-mid">Total Payment (Auto Count) (£)</Label>
+              <Input
+                type="number"
+                value={((parseFloat(invoiceFormData.netAmount) || 0) + (parseFloat(invoiceFormData.vatAmount) || 0)).toFixed(2)}
+                readOnly
+                className="bg-kf-background border-kf-border text-kf-text-dark font-bold"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-kf-text-mid">Description (Optional)</Label>
+              <Input
+                value={invoiceFormData.description}
+                onChange={(e) => setInvoiceFormData({ ...invoiceFormData, description: e.target.value })}
+                placeholder="Description"
+                className="bg-kf-background border-kf-border text-kf-text-dark"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-kf-text-mid">Payment Method (Optional)</Label>
+              <select
+                value={invoiceFormData.paymentMethod}
+                onChange={(e) => setInvoiceFormData({ ...invoiceFormData, paymentMethod: e.target.value })}
+                className="w-full bg-kf-background border border-kf-border rounded-md px-3 py-2 text-kf-text-dark"
+              >
+                <option value="">Select Method</option>
+                <option value="Bank">Bank</option>
+                <option value="Cash">Cash</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {invoiceFormData.paymentMethod === "Other" && (
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Other Payment Method</Label>
+                <Input
+                  value={invoiceFormData.otherPaymentMethod}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, otherPaymentMethod: e.target.value })}
+                  placeholder="Enter payment method"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button variant="ghost" onClick={handleClearInvoiceFields} className="text-sm text-kf-text-mid hover:text-kf-text-dark">
+                Clear fields
+              </Button>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddInvoiceOpen(false)} className="border-kf-border">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddInvoice}
+                disabled={submitting}
+                className="bg-kf-green hover:bg-kf-green-dark text-white"
+              >
+                {submitting ? "Submitting..." : "Submit"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isModifyInvoiceOpen} onOpenChange={setIsModifyInvoiceOpen}>
+        <DialogContent className="max-w-2xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-kf-text-dark">Modify Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-kf-background p-3 rounded-lg border border-kf-border">
+              <p className="text-sm text-kf-text-mid">Supplier</p>
+              <p className="font-semibold text-kf-text-dark">{supplier?.name}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Date</Label>
+                <Input
+                  type="date"
+                  value={modifyInvoiceFormData.date}
+                  onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, date: e.target.value })}
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Invoice Number</Label>
+                <Input
+                  value={modifyInvoiceFormData.invoiceNo}
+                  onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, invoiceNo: e.target.value })}
+                  placeholder="Invoice #"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Net Value (£)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={modifyInvoiceFormData.netAmount}
+                  onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, netAmount: e.target.value })}
+                  placeholder="0.00"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">VAT Value (£)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={modifyInvoiceFormData.vatAmount}
+                  onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, vatAmount: e.target.value })}
+                  placeholder="0.00"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-kf-text-mid">Total Payment (Auto Count) (£)</Label>
+              <Input
+                type="number"
+                value={((parseFloat(modifyInvoiceFormData.netAmount) || 0) + (parseFloat(modifyInvoiceFormData.vatAmount) || 0)).toFixed(2)}
+                readOnly
+                className="bg-kf-background border-kf-border text-kf-text-dark font-bold"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-kf-text-mid">Description (Optional)</Label>
+              <Input
+                value={modifyInvoiceFormData.description}
+                onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, description: e.target.value })}
+                placeholder="Description"
+                className="bg-kf-background border-kf-border text-kf-text-dark"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-kf-text-mid">Payment Method (Optional)</Label>
+              <select
+                value={modifyInvoiceFormData.paymentMethod}
+                onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, paymentMethod: e.target.value })}
+                className="w-full bg-kf-background border border-kf-border rounded-md px-3 py-2 text-kf-text-dark"
+              >
+                <option value="">Select Method</option>
+                <option value="Bank">Bank</option>
+                <option value="Cash">Cash</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {modifyInvoiceFormData.paymentMethod === "Other" && (
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Other Payment Method</Label>
+                <Input
+                  value={modifyInvoiceFormData.otherPaymentMethod}
+                  onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, otherPaymentMethod: e.target.value })}
+                  placeholder="Enter payment method"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
+                />
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsModifyInvoiceOpen(false)} className="border-kf-border">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateInvoice}
+                disabled={submitting}
+                className="bg-kf-green hover:bg-kf-green-dark text-white"
+              >
+                {submitting ? "Updating..." : "Update Invoice"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isModifyOpen} onOpenChange={setIsModifyOpen}>
         <DialogContent className="max-w-2xl bg-sidebar border-kf-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -728,7 +1183,7 @@ export default function SupplierProfile() {
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="bg-kf-background border-kf-border"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
                   placeholder="Supplier name"
                 />
               </div>
@@ -738,7 +1193,7 @@ export default function SupplierProfile() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="bg-kf-background border-kf-border"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
                   placeholder="supplier@example.com"
                 />
               </div>
@@ -749,7 +1204,7 @@ export default function SupplierProfile() {
               <Input
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="bg-kf-background border-kf-border"
+                className="bg-kf-background border-kf-border text-kf-text-dark"
                 placeholder="Phone number"
               />
             </div>
@@ -767,7 +1222,7 @@ export default function SupplierProfile() {
                         address: { ...formData.address, street: e.target.value },
                       })
                     }
-                    className="bg-kf-background border-kf-border"
+                    className="bg-kf-background border-kf-border text-kf-text-dark"
                     placeholder="Street address"
                   />
                 </div>
@@ -781,7 +1236,7 @@ export default function SupplierProfile() {
                         address: { ...formData.address, city: e.target.value },
                       })
                     }
-                    className="bg-kf-background border-kf-border"
+                    className="bg-kf-background border-kf-border text-kf-text-dark"
                     placeholder="City"
                   />
                 </div>
@@ -795,7 +1250,7 @@ export default function SupplierProfile() {
                         address: { ...formData.address, postalCode: e.target.value },
                       })
                     }
-                    className="bg-kf-background border-kf-border"
+                    className="bg-kf-background border-kf-border text-kf-text-dark"
                     placeholder="Postal code"
                   />
                 </div>
@@ -831,7 +1286,7 @@ export default function SupplierProfile() {
                   type="date"
                   value={modifyFormData.dateReceived}
                   onChange={(e) => setModifyFormData({ ...modifyFormData, dateReceived: e.target.value })}
-                  className="bg-kf-background border-kf-border"
+                  className="bg-kf-background border-kf-border text-kf-text-dark"
                 />
               </div>
             </div>

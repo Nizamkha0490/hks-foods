@@ -546,318 +546,282 @@ export const exportOrderReceipt = async (req, res) => {
       })
     }
 
-    const doc = new PDFDocument({ margin: 40, size: "A4" })
+    const doc = new PDFDocument({ margin: 40, size: "A4", bufferPages: true })
 
     res.setHeader("Content-Type", "application/pdf")
     res.setHeader("Content-Disposition", `attachment; filename="receipt-${order.orderNo}.pdf"`)
 
     doc.pipe(res)
 
-    // Add centered watermark background with two lines
-    doc.save()
-    doc
-      .translate(297, 421) // Center of A4 page
-      .rotate(-45)
-      .opacity(0.03)
-      .fontSize(60)
-      .font("Helvetica-Bold")
-      .fillColor("#000000")
-      .text("HKS FOODS", -80, -20)
-      .text("LTD", 40, 30)
-    doc.restore()
-    doc.opacity(1)
+    // Helper Functions
+    const drawWatermark = () => {
+      doc.save()
+      doc
+        .translate(297, 421) // Center of A4 page
+        .rotate(-45)
+        .opacity(0.03)
+        .fontSize(60)
+        .font("Helvetica-Bold")
+        .fillColor("#000000")
+        .text("HKS FOODS", -80, -20)
+        .text("LTD", 40, 30)
+      doc.restore()
+      doc.opacity(1)
+    }
 
-    // Header Section
-    const headerY = 40
+    const drawHeader = (settings) => {
+      // Company Name and Details - Centered
+      doc
+        .fillColor("#1e3a8a")
+        .fontSize(20)
+        .font("Helvetica-Bold")
+        .text(settings?.warehouseName || "HKS FOODS LTD", 0, 40, { align: "center" })
 
-    // Fetch settings
+      doc
+        .fillColor("#666666")
+        .fontSize(9)
+        .font("Helvetica")
+        .text(settings?.address || "104 ANTHONY ROAD", { align: "center" })
+        .text(settings?.postalCode || "BIRMINGHAM B83AA", { align: "center" })
+
+      // Separator
+      doc.moveDown(0.5)
+      doc.strokeColor("#1e3a8a").lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke()
+      doc.moveDown(0.5)
+
+      // Order Info Line
+      doc.moveDown(0.3)
+      doc
+        .fontSize(10)
+        .text(
+          `Order Number: ${order.orderNo} | Date: ${new Date(order.createdAt).toLocaleDateString("en-GB")} | Status: ${order.status.toUpperCase()}`,
+          { align: "center" },
+        )
+    }
+
+    const drawReceiptDetails = (detailsY) => {
+      // Two column layout
+      const leftColumnX = 40
+      const rightColumnX = 280
+
+      // Client Details - Left Column
+      doc.fillColor("#1e3a8a").fontSize(10).font("Helvetica-Bold").text("BILL TO:", leftColumnX, detailsY)
+
+      doc.fillColor("#000000").font("Helvetica").fontSize(9)
+      const client = order.clientId
+      let clientY = detailsY + 15
+      if (client) {
+        doc.text(client.name || "N/A", leftColumnX, clientY)
+        clientY += 12
+        if (client.email) {
+          doc.text(`Email: ${client.email}`, leftColumnX, clientY)
+          clientY += 12
+        }
+        if (client.phone) {
+          doc.text(`Phone: ${client.phone}`, leftColumnX, clientY)
+          clientY += 12
+        }
+        if (client.address) {
+          let addressY = clientY
+          if (client.address.street) {
+            doc.text(`Address: ${client.address.street}`, leftColumnX, addressY)
+            addressY += 12
+          }
+          const cityInfo = [client.address.city, client.address.postalCode].filter(Boolean).join(", ")
+          if (cityInfo) {
+            doc.text(cityInfo, leftColumnX, addressY)
+          }
+        }
+      }
+
+      // Order Details - Right Column
+      doc.fillColor("#1e3a8a").font("Helvetica-Bold").text("ORDER INFORMATION:", rightColumnX, detailsY)
+
+      doc
+        .fillColor("#000000")
+        .font("Helvetica")
+        .fontSize(9)
+        .text(`Invoice Type: ${order.invoiceType || "N/A"}`, rightColumnX, detailsY + 15)
+        .text(`VAT Treatment: ${order.includeVAT ? "VAT Included" : "VAT Excluded"}`, rightColumnX, detailsY + 27)
+
+      if (order.deliveryCost && order.deliveryCost > 0) {
+        doc.text(`Delivery: £${Number(order.deliveryCost).toFixed(2)}`, rightColumnX, detailsY + 39)
+      }
+
+      // Stamp
+      try {
+        const stampPath = path.join(__dirname, '../assets/paid_stamp.png')
+        doc.image(stampPath, 460, detailsY - 20, { width: 80, height: 80, align: 'right' })
+      } catch (e) { /* ignore */ }
+
+      // Return Y position where table should start
+      return Math.max(clientY, detailsY + 90) + 15
+    }
+
+    const drawTableHead = (y) => {
+      doc.fillColor("#1e3a8a").rect(40, y, 515, 20).fill()
+      doc.fillColor("#ffffff").fontSize(9).font("Helvetica-Bold")
+      doc.text("#", 45, y + 7)
+      doc.text("DESCRIPTION", 70, y + 7)
+      doc.text("QTY", 310, y + 7)
+      doc.text("PRICE", 360, y + 7)
+      doc.text("VAT", 420, y + 7)
+      doc.text("AMOUNT", 480, y + 7)
+      doc.fillColor("#000000").fontSize(8).font("Helvetica") // Reset font
+    }
+
+
+    // --- Start Drawing ---
+
     const settings = await Settings.findOne({ userId: req.admin._id })
 
-
-    // Company Name and Details - Centered
-    doc
-      .fillColor("#1e3a8a")
-      .fontSize(20)
-      .font("Helvetica-Bold")
-      .text(settings?.warehouseName || "HKS FOODS LTD", { align: "center" })
-
-    doc
-      .fillColor("#666666")
-      .fontSize(9)
-      .font("Helvetica")
-      .text(settings?.address || "104 ANTHONY ROAD", { align: "center" })
-      .text(settings?.postalCode || "BIRMINGHAM B83AA", { align: "center" })
-
-    // Receipt Title and Order Info
-    doc.moveDown(0.5)
-    doc.strokeColor("#1e3a8a").lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke()
-    doc.moveDown(0.5)
-    // doc.fillColor("#000000").fontSize(16).font("Helvetica-Bold").text("TAX INVOICE", { align: "center" })
-
-    doc.moveDown(0.3)
-    doc
-      .fontSize(10)
-      .text(
-        `Order Number: ${order.orderNo} | Date: ${new Date(order.createdAt).toLocaleDateString("en-GB")} | Status: ${order.status.toUpperCase()}`,
-        { align: "center" },
-      )
-
-    // Client and Order Details
-    const detailsY = doc.y + 15
-
-    // Two column layout - ADJUSTED for stamp
-    const leftColumnX = 40
-    const rightColumnX = 280  // Moved left to make room for stamp
-
-    // Client Details - Left Column
-    doc.fillColor("#1e3a8a").fontSize(10).font("Helvetica-Bold").text("BILL TO:", leftColumnX, detailsY)
-
-    doc.fillColor("#000000").font("Helvetica").fontSize(9)
-    const client = order.clientId
-    let clientY = detailsY + 15
-    if (client) {
-      doc.text(client.name || "N/A", leftColumnX, clientY)
-      clientY += 12
-      if (client.email) {
-        doc.text(`Email: ${client.email}`, leftColumnX, clientY)
-        clientY += 12
-      }
-      if (client.phone) {
-        doc.text(`Phone: ${client.phone}`, leftColumnX, clientY)
-        clientY += 12
-      }
-      if (client.address) {
-        let addressY = clientY
-        if (client.address.street) {
-          doc.text(`Address: ${client.address.street}`, leftColumnX, addressY)
-          addressY += 12
-        }
-        const cityInfo = [client.address.city, client.address.postalCode].filter(Boolean).join(", ")
-        if (cityInfo) {
-          doc.text(cityInfo, leftColumnX, addressY)
-        }
-      }
-    }
-
-    // Order Details - Right Column (shifted left)
-    doc.fillColor("#1e3a8a").font("Helvetica-Bold").text("ORDER INFORMATION:", rightColumnX, detailsY)
-
-    doc
-      .fillColor("#000000")
-      .font("Helvetica")
-      .fontSize(9)
-      .text(`Invoice Type: ${order.invoiceType || "N/A"}`, rightColumnX, detailsY + 15)
-      .text(`VAT Treatment: ${order.includeVAT ? "VAT Included" : "VAT Excluded"}`, rightColumnX, detailsY + 27)
-
-    if (order.deliveryCost && order.deliveryCost > 0) {
-      doc.text(`Delivery: £${Number(order.deliveryCost).toFixed(2)}`, rightColumnX, detailsY + 39)
-    }
-
-    // Add Company Stamp to the right of ORDER INFORMATION
-    try {
-      const stampPath = path.join(__dirname, '../assets/paid_stamp.png')
-      const stampX = 460  // Right side position
-      const stampY = detailsY - 20
-      const stampWidth = 80
-      const stampHeight = 80
-
-      doc.image(stampPath, stampX, stampY, {
-        width: stampWidth,
-        height: stampHeight,
-        align: 'right'
-      })
-    } catch (stampError) {
-      console.log("Stamp image not found, skipping:", stampError.message)
-    }
-
-    // Items Table - Start at appropriate position
-    const tableTop = Math.max(clientY, detailsY + 90) + 15
-
-    // Table Header with dark blue background - UPDATED with VAT column
-    doc.fillColor("#1e3a8a").rect(40, tableTop, 515, 20).fill()
-
-    doc.fillColor("#ffffff").fontSize(9).font("Helvetica-Bold")
-
-    const itemX = 45
-    const descX = 70
-    const qtyX = 310
-    const priceX = 360
-    const vatX = 420
-    const totalX = 480
-
-    doc.text("#", itemX, tableTop + 7)
-    doc.text("DESCRIPTION", descX, tableTop + 7)
-    doc.text("QTY", qtyX, tableTop + 7)
-    doc.text("PRICE", priceX, tableTop + 7)
-    doc.text("VAT", vatX, tableTop + 7)
-    doc.text("AMOUNT", totalX, tableTop + 7)
-
-
-    // Table Rows - UPDATED with VAT column
-    doc.fillColor("#000000").fontSize(8).font("Helvetica")
+    // Page 1 Setup
+    drawWatermark()
+    drawHeader(settings)
+    let tableTop = drawReceiptDetails(doc.y + 15)
+    drawTableHead(tableTop)
 
     let y = tableTop + 25
     let subtotal = 0
     let totalVAT = 0
-    const vatBreakdown = {}
+    let pageNumber = 1
+    const ITEMS_PER_PAGE = 25
+    let itemsOnCurrentPage = 0
 
-    // Process products with VAT
+    // Process Lines with Strict Pagination
     order.lines.forEach((line, index) => {
+      // STRICT PAGINATION: Check if we hit the limit
+      if (itemsOnCurrentPage >= ITEMS_PER_PAGE) {
+        doc.addPage()
+        pageNumber++
+        itemsOnCurrentPage = 0 // Reset counter for new page
+
+        drawWatermark()
+        drawHeader(settings)
+
+        // On subsequent pages, we don't redraw the massive Receipt Details.
+        // We just start the table higher up.
+        y = 150
+        drawTableHead(y)
+        y += 25
+      }
+
       const productName = line.productId?.name || line.productName || "Unknown Product"
       const qty = Number(line.qty) || 0
       const price = Number(line.price) || 0
       let lineTotal = qty * price
 
-      // Calculate VAT for products only (not delivery)
-      // Explicitly check for undefined/null to allow 0% VAT
       const vatRate = line.productId?.vat !== undefined && line.productId?.vat !== null ? line.productId.vat : 20
       const vatAmount = lineTotal * (vatRate / 100)
 
       if (order.includeVAT) {
         totalVAT += vatAmount
         lineTotal += vatAmount
-        if (!vatBreakdown[vatRate]) vatBreakdown[vatRate] = 0
-        vatBreakdown[vatRate] += vatAmount
       }
-
       subtotal += lineTotal
 
-      // Alternate row background
+      // Alternate row bg
       if (index % 2 === 0) {
-        doc
-          .fillColor("#f8fafc")
-          .rect(40, y - 3, 515, 16)
-          .fill()
+        doc.fillColor("#f8fafc").rect(40, y - 3, 515, 16).fill()
         doc.fillColor("#000000")
       }
 
-      doc.text(`${index + 1}`, itemX, y)
-      doc.text(productName, descX, y, { width: 220, align: "left" })
-      doc.text(qty.toString(), qtyX, y, { width: 35, align: "right" })
-      doc.text(`£${price.toFixed(2)}`, priceX, y, { width: 45, align: "right" })
+      // Draw Row
+      doc.text(`${index + 1}`, 45, y)
+      doc.text(productName, 70, y, { width: 220, align: "left" })
+      doc.text(qty.toString(), 310, y, { width: 35, align: "right" })
+      doc.text(`£${price.toFixed(2)}`, 360, y, { width: 45, align: "right" })
 
-      // VAT Value Column - show VAT amount
       if (order.includeVAT) {
-        doc.text(`£${vatAmount.toFixed(2)}`, vatX, y, { width: 45, align: "right" })
+        doc.text(`£${vatAmount.toFixed(2)}`, 420, y, { width: 45, align: "right" })
       } else {
-        doc.text("-", vatX, y, { width: 45, align: "right" })
+        doc.text("-", 420, y, { width: 45, align: "right" })
       }
 
-      doc.text(`£${lineTotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+      doc.text(`£${lineTotal.toFixed(2)}`, 480, y, { width: 60, align: "right" })
 
       y += 16
+      itemsOnCurrentPage++
     })
 
-
-
-    // Summary Section
-    y += 10
-    const summaryTop = y
-
-    doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(350, summaryTop).lineTo(555, summaryTop).stroke()
-    y += 12
-
-    // Total VAT - Always show, even if 0 (BEFORE Subtotal)
-    doc.fontSize(9)
-    const vatAmount = order.includeVAT ? totalVAT : 0
-    doc.text("Total VAT:", 420, y, { width: 80, align: "right" })
-    doc.text(`£${vatAmount.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
-    y += 12
-
-    // Subtotal (Products only - before VAT)
-    const subtotalBeforeVAT = order.lines.reduce((sum, line) => {
-      const lineTotal = (Number(line.qty) || 0) * (Number(line.price) || 0)
-      return sum + lineTotal
-    }, 0)
-
-    doc.text("Subtotal:", 420, y, { width: 80, align: "right" })
-    doc.text(`£${subtotalBeforeVAT.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
-    y += 12
-
-    // Calculate order total (before previous balance) for use in previous balance calculation
-    const orderTotal = subtotal + (Number(order.deliveryCost) || 0)
-
-    // Previous Balance - Calculate based on order type
-    const clientTotalDues = client?.totalDues || 0
-    let previousBalance = 0
-
-    // If this is an on_account order, the current order total is already in totalDues
-    // So we need to subtract it to show only the previous balance
-    if (order.invoiceType === 'on_account') {
-      previousBalance = clientTotalDues - orderTotal
+    // Totals Section Logic - Draw ONLY after loop finishes
+    // If not enough space for totals on current page, add new page
+    // We estimate totals need ~120 units of space
+    if (y > 700) {
+      doc.addPage()
+      drawWatermark()
+      drawHeader(settings) // Optional: can just be a blank continue page, but header looks nicer
+      y = 150
     } else {
-      // For other payment types, show the full totalDues as previous balance
-      previousBalance = clientTotalDues
+      y += 10
     }
 
-    // Only show previous balance if it exists and is greater than 0
+    doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(350, y).lineTo(555, y).stroke()
+    y += 12
+
+    const vatValue = order.includeVAT ? totalVAT : 0
+    doc.text("Total VAT:", 420, y, { width: 80, align: "right" })
+    doc.text(`£${vatValue.toFixed(2)}`, 480, y, { width: 60, align: "right" })
+    y += 12
+
+    const subtotalBeforeVAT = order.lines.reduce((sum, line) => sum + (line.qty * line.price), 0)
+    doc.text("Subtotal:", 420, y, { width: 80, align: "right" })
+    doc.text(`£${subtotalBeforeVAT.toFixed(2)}`, 480, y, { width: 60, align: "right" })
+    y += 12
+
+    const orderTotal = subtotal + (Number(order.deliveryCost) || 0)
+    const clientTotalDues = order.clientId?.totalDues || 0
+    let previousBalance = order.invoiceType === 'on_account' ? clientTotalDues - orderTotal : clientTotalDues
+
     if (previousBalance > 0) {
       doc.text("Previous Balance:", 420, y, { width: 80, align: "right" })
-      doc.text(`£${previousBalance.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+      doc.text(`£${previousBalance.toFixed(2)}`, 480, y, { width: 60, align: "right" })
       y += 12
     }
 
-    // Delivery Cost - NO VAT
-    if (order.deliveryCost && order.deliveryCost > 0) {
-      const deliveryTotal = Number(order.deliveryCost) // No VAT on delivery
-
+    if (order.deliveryCost > 0) {
       doc.text("Delivery Charge:", 420, y, { width: 80, align: "right" })
-      doc.text(`£${deliveryTotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+      doc.text(`£${Number(order.deliveryCost).toFixed(2)}`, 480, y, { width: 60, align: "right" })
       y += 12
     }
 
-    // Total - Includes products, delivery, and previous balance
     doc.fontSize(10).font("Helvetica-Bold")
     doc.strokeColor("#1e3a8a").lineWidth(1).moveTo(350, y).lineTo(555, y).stroke()
     y += 8
 
-    // Calculate final total including delivery and previous balance
     const finalTotal = orderTotal + (previousBalance > 0 ? previousBalance : 0)
     doc.text("TOTAL:", 420, y, { width: 80, align: "right" })
-    doc.text(`£${finalTotal.toFixed(2)}`, totalX, y, { width: 60, align: "right" })
+    doc.text(`£${finalTotal.toFixed(2)}`, 480, y, { width: 60, align: "right" })
 
-    // Footer Section
-    const footerY = Math.max(y + 30, 700)
+    // Footer - Add page numbers
+    const pages = doc.bufferedPageRange()
+    for (let i = 0; i < pages.count; i++) {
+      doc.switchToPage(i)
 
-    // Thank you message
-    doc.fontSize(9).font("Helvetica").fillColor("#1e3a8a")
-    doc.text("Thank you for your business with HKS Foods Ltd", { align: "center" })
-    doc.moveDown(0.3)
+      const footerY = 770 // Raised from 790 to avoid auto-page-break on margin
+      doc.fontSize(9).font("Helvetica").fillColor("#1e3a8a")
+      doc.text("Thank you for your business with HKS Foods Ltd", 0, footerY - 35, { align: "center" })
 
-    // Terms and conditions
-    doc.fontSize(7).fillColor("#666666")
-    doc.text("payment within 3 days term", { align: "center" })
-    doc.moveDown(0.5)
+      doc.fontSize(7).fillColor("#666666")
+      doc.text("payment within 3 days term", 0, footerY - 22, { align: "center" })
 
-    // Bottom separator line
-    doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(40, footerY).lineTo(555, footerY).stroke()
+      doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(40, footerY - 12).lineTo(555, footerY - 12).stroke()
 
-    // Footer content - moved down for better spacing
-    const footerContentY = footerY + 12
+      const footerContentY = footerY
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, 40, footerContentY)
 
-    // Left - Generation info
-    doc
-      .fontSize(7)
-      .text(
-        `Generated: ${new Date().toLocaleDateString("en-GB")} at ${new Date().toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' })}`,
-        40,
-        footerContentY,
-      )
+      doc.text(`HKS Foods Ltd | VAT Reg No: ${settings?.vatNumber || "495814839"} | Company No: ${settings?.companyNumber || "16372393"}`, 0, footerContentY, { align: "center" })
 
-    // Center - Company info
-    doc.text(`HKS Foods Ltd | VAT Reg No: ${settings?.vatNumber || "495814839"} | Company No: ${settings?.companyNumber || "16372393"}`, 0, footerContentY, { align: "center" })
+      // Add account info significantly below VAT info
+      const accountInfo = []
+      if (settings?.accountNumber) accountInfo.push(`Account No: ${settings.accountNumber}`)
+      if (settings?.sortCode) accountInfo.push(`Sort Code: ${settings.sortCode}`)
+      if (accountInfo.length > 0) {
+        doc.text(accountInfo.join(' | '), 0, footerContentY + 10, { align: "center" })
+      }
 
-    // Account details on next line
-    const accountInfo = []
-    if (settings?.accountNumber) accountInfo.push(`Account No: ${settings.accountNumber}`)
-    if (settings?.sortCode) accountInfo.push(`Sort Code: ${settings.sortCode}`)
-
-    if (accountInfo.length > 0) {
-      doc.text(accountInfo.join(' | '), 0, footerContentY + 10, { align: "center" })
+      doc.text(`Page ${i + 1} of ${pages.count}`, 515, footerContentY, { align: "right" })
     }
-
-    // Right - Page info
-    doc.text("Page 1 of 1", 515, footerContentY, { align: "right" })
 
     doc.end()
   } catch (error) {

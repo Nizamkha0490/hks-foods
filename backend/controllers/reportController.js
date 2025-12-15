@@ -742,3 +742,158 @@ export const getSalesOverview = asyncHandler(async (req, res) => {
     report,
   });
 });
+
+// Get Profit Stats (for KPI cards)
+export const getProfitStats = asyncHandler(async (req, res) => {
+  if (!req.admin || !req.admin._id) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+
+  const today = new Date();
+  const startOfToday = new Date(today.setHours(0, 0, 0, 0));
+  const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  // Helper function to calculate profit for orders
+  const calculateProfit = async (query) => {
+    const orders = await Order.find(query).populate('lines.productId');
+    let totalProfit = 0;
+
+    orders.forEach(order => {
+      order.lines.forEach(line => {
+        if (line.productId) {
+          const sellingPrice = line.price;
+          const costPrice = line.productId.costPrice || 0;
+          const qty = line.qty;
+          totalProfit += (sellingPrice - costPrice) * qty;
+        }
+      });
+    });
+
+    return totalProfit;
+  };
+
+  const totalProfit = await calculateProfit({ userId: req.admin._id });
+  const totalProfitThisMonth = await calculateProfit({
+    userId: req.admin._id,
+    createdAt: { $gte: startOfMonth }
+  });
+  const totalProfitThisWeek = await calculateProfit({
+    userId: req.admin._id,
+    createdAt: { $gte: startOfWeek }
+  });
+  const totalProfitToday = await calculateProfit({
+    userId: req.admin._id,
+    createdAt: { $gte: startOfToday }
+  });
+
+  res.status(200).json({
+    success: true,
+    totalProfit,
+    totalProfitThisMonth,
+    totalProfitThisWeek,
+    totalProfitToday,
+  });
+});
+
+// Get Profit Report (for Profit tab with daily/monthly/yearly views)
+export const getProfitReport = asyncHandler(async (req, res) => {
+  if (!req.admin || !req.admin._id) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+
+  const { view = 'monthly', startDate, endDate } = req.query;
+
+  const query = { userId: req.admin._id };
+
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) query.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt.$lte = end;
+    }
+  }
+
+  const orders = await Order.find(query).populate('lines.productId');
+
+  // Group by period based on view
+  const profitData = {};
+
+  orders.forEach(order => {
+    let periodKey;
+    const orderDate = new Date(order.createdAt);
+
+    if (view === 'daily') {
+      periodKey = orderDate.toISOString().split('T')[0];
+    } else if (view === 'monthly') {
+      periodKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+    } else if (view === 'yearly') {
+      periodKey = String(orderDate.getFullYear());
+    }
+
+    if (!profitData[periodKey]) {
+      profitData[periodKey] = {
+        totalSales: 0,
+        totalCost: 0,
+        orderCount: 0
+      };
+    }
+
+    let orderSales = 0;
+    let orderCost = 0;
+
+    order.lines.forEach(line => {
+      const qty = line.qty || 0;
+      const sellingPrice = line.price || 0;
+      const costPrice = line.productId?.costPrice || 0;
+
+      orderSales += qty * sellingPrice;
+      orderCost += qty * costPrice;
+    });
+
+    profitData[periodKey].totalSales += orderSales;
+    profitData[periodKey].totalCost += orderCost;
+    profitData[periodKey].orderCount += 1;
+  });
+
+  // Convert to array and format
+  const report = Object.entries(profitData)
+    .map(([period, data], index) => {
+      const grossProfit = data.totalSales - data.totalCost;
+      const profitMargin = data.totalSales > 0 ? (grossProfit / data.totalSales) * 100 : 0;
+
+      let periodLabel;
+      if (view === 'daily') {
+        periodLabel = new Date(period).toLocaleDateString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric'
+        });
+      } else if (view === 'monthly') {
+        const [year, month] = period.split('-');
+        periodLabel = new Date(year, parseInt(month) - 1).toLocaleDateString('en-GB', {
+          month: 'long', year: 'numeric'
+        });
+      } else {
+        periodLabel = period;
+      }
+
+      return {
+        'Sr. No.': index + 1,
+        'Date': period,
+        'Period': periodLabel,
+        'Total Sales': data.totalSales.toFixed(2),
+        'Total Cost': data.totalCost.toFixed(2),
+        'Gross Profit': grossProfit.toFixed(2),
+        'Profit Margin %': profitMargin.toFixed(2),
+        'Orders': data.orderCount
+      };
+    })
+    .sort((a, b) => b.Date.localeCompare(a.Date));
+
+  res.status(200).json({
+    success: true,
+    view,
+    report
+  });
+});

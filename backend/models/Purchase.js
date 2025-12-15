@@ -23,6 +23,9 @@ const purchaseSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    paymentMethod: {
+      type: String,
+    },
     items: [
       {
         productId: {

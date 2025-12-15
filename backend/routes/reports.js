@@ -15,6 +15,8 @@ import {
   getSalesStats,
   getTopProducts,
   getSalesOverview,
+  getProfitStats,
+  getProfitReport,
 } from "../controllers/reportController.js"
 import { createFullBackup, exportBackupAsJSON } from "../controllers/backupController.js"
 import { verifyToken } from "../middleware/auth.js"
@@ -30,6 +32,8 @@ router.get("/clients", getClientReport)
 router.get("/sales-stats", getSalesStats)
 router.get("/top-products", getTopProducts)
 router.get("/sales-overview", getSalesOverview)
+router.get("/profit-stats", getProfitStats)
+router.get("/profit-report", getProfitReport)
 router.get("/daily", getDailyReport)
 router.get("/monthly", getMonthlyReport)
 router.get("/yearly", getYearlyReport)

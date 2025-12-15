@@ -14,6 +14,8 @@ import {
   updatePurchase,
   deletePurchase,
   getSuppliersWithBalances,
+  recordInvoice,
+  updateInvoice,
 } from "../controllers/supplierController.js";
 import { verifyToken } from "../middleware/auth.js";
 
@@ -32,6 +34,8 @@ router.delete("/:id", deleteSupplier);
 
 // New endpoints
 router.post("/:id/record", recordGoods); // record goods for supplier
+router.post("/:id/invoice", recordInvoice); // record invoice for supplier
+router.put("/:id/invoice/:purchaseId", updateInvoice); // update invoice for supplier
 router.get("/:id/purchases", getPurchasesForSupplier); // get recent purchases
 router.get("/:id/statement", exportSupplierStatement); // export statement
 router.put("/:id/purchases/:purchaseId", updatePurchase); // update purchase

@@ -844,3 +844,139 @@ export const exportSupplierStatement = asyncHandler(async (req, res) => {
 
   doc.end()
 })
+
+export const recordInvoice = asyncHandler(async (req, res) => {
+  if (!req.admin || !req.admin._id) {
+    return res.status(401).json({ success: false, message: "Unauthorized" })
+  }
+
+  const { invoiceNo, dateReceived, netAmount, vatAmount, notes, paymentMethod } = req.body
+  const supplierId = req.params.id
+
+  if (!mongoose.Types.ObjectId.isValid(supplierId)) {
+    return res.status(400).json({ success: false, message: "Invalid supplier id" })
+  }
+
+  const supplier = await Supplier.findOne({
+    _id: supplierId,
+    userId: req.admin._id,
+  })
+  if (!supplier) {
+    return res.status(404).json({ success: false, message: "Supplier not found" })
+  }
+
+  const net = Number(netAmount || 0)
+  const vat = Number(vatAmount || 0)
+
+  if (net <= 0) {
+    return res.status(400).json({ success: false, message: "Net value must be greater than 0" })
+  }
+
+  const totalAmount = net + vat
+
+  try {
+    const Counter = mongoose.model("Counter")
+    const counter = await Counter.findOneAndUpdate(
+      { name: "purchaseOrderNo", userId: req.admin._id },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true },
+    )
+
+    const purchaseOrderNo = `PO-ID-${String(counter.seq).padStart(4, "0")}`
+
+    const items = [{
+      productName: notes || `Invoice ${invoiceNo || purchaseOrderNo}`,
+      qty: 1,
+      unitPrice: net,
+      total: net
+    }];
+
+    const purchase = await Purchase.create({
+      supplierId,
+      purchaseOrderNo,
+      invoiceNo: invoiceNo || "",
+      dateReceived: dateReceived ? new Date(dateReceived) : new Date(),
+      items,
+      notes,
+      totalAmount,
+      vatRate: net > 0 ? (vat / net) * 100 : 0,
+      vatAmount: vat,
+      userId: req.admin._id,
+      paymentMethod,
+    })
+
+    await Supplier.findOneAndUpdate({ _id: supplierId, userId: req.admin._id }, { $inc: { totalDebit: totalAmount } })
+
+    res.status(201).json({
+      success: true,
+      message: "Invoice recorded successfully",
+      purchase,
+    })
+  } catch (error) {
+    console.error("Error recording invoice:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error recording invoice: " + error.message,
+    })
+  }
+})
+
+
+export const updateInvoice = asyncHandler(async (req, res) => {
+  if (!req.admin || !req.admin._id) {
+    return res.status(401).json({ success: false, message: "Unauthorized" })
+  }
+
+  const { purchaseId } = req.params
+  const { invoiceNo, dateReceived, netAmount, vatAmount, notes, paymentMethod } = req.body
+
+  const purchase = await Purchase.findOne({ _id: purchaseId, userId: req.admin._id })
+  if (!purchase) {
+    return res.status(404).json({ success: false, message: "Purchase not found" })
+  }
+
+  const net = Number(netAmount || 0)
+  const vat = Number(vatAmount || 0)
+
+  if (net <= 0) {
+    return res.status(400).json({ success: false, message: "Net value must be greater than 0" })
+  }
+
+  const totalAmount = net + vat
+
+  // Revert old total from Supplier totalDebit
+  await Supplier.findOneAndUpdate(
+    { _id: purchase.supplierId, userId: req.admin._id },
+    { $inc: { totalDebit: -purchase.totalAmount } }
+  )
+
+  // Update logic
+  // Update dummy item
+  const items = [{
+    productName: notes || `Invoice ${invoiceNo || purchase.purchaseOrderNo}`,
+    qty: 1,
+    unitPrice: net,
+    total: net,
+    // Preserve productId if it existed (unlikely for invoice but good practice)
+    productId: purchase.items[0]?.productId
+  }];
+
+  purchase.invoiceNo = invoiceNo || "";
+  purchase.dateReceived = dateReceived ? new Date(dateReceived) : purchase.dateReceived;
+  purchase.items = items;
+  purchase.notes = notes;
+  purchase.totalAmount = totalAmount;
+  purchase.vatRate = net > 0 ? (vat / net) * 100 : 0;
+  purchase.vatAmount = vat;
+  purchase.paymentMethod = paymentMethod;
+
+  await purchase.save();
+
+  // Add new total to Supplier totalDebit
+  await Supplier.findOneAndUpdate(
+    { _id: purchase.supplierId, userId: req.admin._id },
+    { $inc: { totalDebit: totalAmount } }
+  )
+
+  res.status(200).json({ success: true, purchase })
+})
