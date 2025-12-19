@@ -7,7 +7,7 @@ export const createExpense = asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: "Unauthorized" })
   }
 
-  const { date, category, description, amount, paymentMethod, reference, notes } = req.body
+  const { date, category, description, amount, paymentMethod, reference, notes, vat } = req.body
 
   if (!date || !category || !description || !amount || !paymentMethod) {
     return res.status(400).json({
@@ -24,6 +24,7 @@ export const createExpense = asyncHandler(async (req, res) => {
     paymentMethod,
     reference: reference || "",
     notes: notes || "",
+    vat: vat !== undefined ? Number(vat) : 0,
     userId: req.admin._id,
   })
 
@@ -106,7 +107,7 @@ export const updateExpense = asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: "Unauthorized" })
   }
 
-  const { date, category, description, amount, paymentMethod, reference, notes } = req.body
+  const { date, category, description, amount, paymentMethod, reference, notes, vat } = req.body
 
   let expense = await Expense.findOne({ _id: req.params.id, userId: req.admin._id })
 
@@ -124,6 +125,7 @@ export const updateExpense = asyncHandler(async (req, res) => {
   if (paymentMethod !== undefined) expense.paymentMethod = paymentMethod
   if (reference !== undefined) expense.reference = reference
   if (notes !== undefined) expense.notes = notes
+  if (vat !== undefined) expense.vat = Number(vat)
 
   await expense.save()
 

@@ -16,6 +16,9 @@ import {
   getSuppliersWithBalances,
   recordInvoice,
   updateInvoice,
+  recalculateSupplierBalance,
+  exportInvoiceListPDF,
+  exportInvoiceListExcel,
 } from "../controllers/supplierController.js";
 import { verifyToken } from "../middleware/auth.js";
 
@@ -40,5 +43,8 @@ router.get("/:id/purchases", getPurchasesForSupplier); // get recent purchases
 router.get("/:id/statement", exportSupplierStatement); // export statement
 router.put("/:id/purchases/:purchaseId", updatePurchase); // update purchase
 router.delete("/:id/purchases/:purchaseId", deletePurchase); // delete purchase
+router.post("/:id/recalculate-balance", recalculateSupplierBalance); // recalculate supplier balance
+router.get("/:id/invoice-list/pdf", exportInvoiceListPDF); // export invoice list as PDF
+router.get("/:id/invoice-list/excel", exportInvoiceListExcel); // export invoice list as Excel
 
 export default router;

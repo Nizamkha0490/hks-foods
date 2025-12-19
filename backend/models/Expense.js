@@ -88,12 +88,17 @@ const expenseSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    vat: {
+      type: Number,
+      enum: [0, 5, 20],
+      default: 0,
+    },
     isActive: {
       type: Boolean,
       default: true,
     },
 
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
   },
   { timestamps: true },
 )

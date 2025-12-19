@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Search, Edit, Trash2, Plus } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Supplier {
   _id: string
@@ -93,7 +94,8 @@ export default function SupplierProfile() {
     netAmount: "",
     vatAmount: "",
     description: "",
-    paymentMethod: "", // Default empty or "Bank"? User said optional.
+    isPaid: false,
+    paymentMethod: "",
     otherPaymentMethod: "",
   })
 
@@ -147,6 +149,7 @@ export default function SupplierProfile() {
     netAmount: "",
     vatAmount: "",
     description: "",
+    isPaid: false,
     paymentMethod: "",
     otherPaymentMethod: "",
   })
@@ -155,18 +158,12 @@ export default function SupplierProfile() {
   const openModifyTransactionDialog = (transaction: Transaction) => {
     setSelectedTransaction(transaction)
 
-    // Check if it's likely an invoice (has paymentMethod or single item with potential Invoice name)
-    // Strongest signal: paymentMethod field is present in the record (if we fetch it)
-    // For now, let's assume if it has paymentMethod, use Modify Invoice. 
-    // If not, fall back to Modify Goods. 
-    // Note: Transaction interface might need update to include paymentMethod if not already there.
-    // The previous view of code showed Transaction interface having paymentMethod: string.
-
-    if (transaction.paymentMethod) {
+    // Check if it has invoiceNo (invoice) or not (goods)
+    if ((transaction as any).invoiceNo) {
       // It's an invoice
       setModifyInvoiceFormData({
         date: new Date(transaction.createdAt).toISOString().split('T')[0],
-        invoiceNo: "", // Can't easily recover invoiceNo from purchaseOrderNo if it wasn't saved separately unless looking at transaction.invoiceNo? 
+
         // Wait, transaction interface might need invoiceNo? 
         // Let's assume transaction is the Purchase object which has invoiceNo.
         // Check if transaction has invoiceNo currently in interface? 
@@ -180,6 +177,7 @@ export default function SupplierProfile() {
         netAmount: (transaction.items && transaction.items.length > 0) ? transaction.items[0].unitPrice.toString() : "",
         vatAmount: (transaction as any).vatAmount ? (transaction as any).vatAmount.toString() : "0",
         description: (transaction as any).notes || "",
+        isPaid: (transaction as any).isPaid !== undefined ? (transaction as any).isPaid : (transaction.paymentMethod ? true : false),
         paymentMethod: ["Bank", "Cash"].includes(transaction.paymentMethod) ? transaction.paymentMethod : "Other",
         otherPaymentMethod: ["Bank", "Cash"].includes(transaction.paymentMethod) ? "" : transaction.paymentMethod
       })
@@ -215,9 +213,10 @@ export default function SupplierProfile() {
         netAmount: parseFloat(modifyInvoiceFormData.netAmount),
         vatAmount: parseFloat(modifyInvoiceFormData.vatAmount) || 0,
         notes: modifyInvoiceFormData.description,
-        paymentMethod: modifyInvoiceFormData.paymentMethod === "Other"
+        isPaid: modifyInvoiceFormData.isPaid,
+        paymentMethod: modifyInvoiceFormData.isPaid ? (modifyInvoiceFormData.paymentMethod === "Other"
           ? modifyInvoiceFormData.otherPaymentMethod
-          : modifyInvoiceFormData.paymentMethod
+          : modifyInvoiceFormData.paymentMethod) : ""
       }
 
       await api.put(`/suppliers/${id}/invoice/${selectedTransaction._id}`, payload)
@@ -342,6 +341,7 @@ export default function SupplierProfile() {
       netAmount: "",
       vatAmount: "",
       description: "",
+      isPaid: false,
       paymentMethod: "",
       otherPaymentMethod: "",
     })
@@ -362,9 +362,10 @@ export default function SupplierProfile() {
         netAmount: parseFloat(invoiceFormData.netAmount),
         vatAmount: parseFloat(invoiceFormData.vatAmount) || 0,
         notes: invoiceFormData.description,
-        paymentMethod: invoiceFormData.paymentMethod === "Other"
+        isPaid: invoiceFormData.isPaid,
+        paymentMethod: invoiceFormData.isPaid ? (invoiceFormData.paymentMethod === "Other"
           ? invoiceFormData.otherPaymentMethod
-          : invoiceFormData.paymentMethod
+          : invoiceFormData.paymentMethod) : ""
       }
 
       await api.post(`/suppliers/${id}/invoice`, payload)
@@ -510,6 +511,31 @@ export default function SupplierProfile() {
     }
   }
 
+  const handleExportExcel = async () => {
+    try {
+      setPrintingStatement(true)
+      const response = await api.get(
+        `/suppliers/${id}/invoice-list/excel?from=${dateRange.from}&to=${dateRange.to}&type=${statementType}`,
+        {
+          responseType: "blob",
+        },
+      )
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${statementType}-${supplier?.name}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setIsPrintStatementOpen(false)
+    } catch (error) {
+      console.error("Error exporting Excel:", error)
+      toast.error("Error exporting Excel")
+    } finally {
+      setPrintingStatement(false)
+    }
+  }
+
   if (!supplier) {
     return (
       <div className="space-y-6 p-6 animate-fade-in">
@@ -522,7 +548,7 @@ export default function SupplierProfile() {
 
   const filteredTransactions = transactions.filter(t => {
     // Filter by view mode first
-    const isInvoice = !!t.paymentMethod
+    const isInvoice = !!(t as any).invoiceNo
     if (viewMode === 'goods' && isInvoice) return false
     if (viewMode === 'invoices' && !isInvoice) return false
 
@@ -611,18 +637,22 @@ export default function SupplierProfile() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 border-b border-kf-border">
           <Button
-            variant={viewMode === 'goods' ? 'default' : 'outline'}
+            variant={viewMode === 'goods' ? 'default' : 'ghost'}
             onClick={() => setViewMode('goods')}
-            className={viewMode === 'goods' ? "bg-kf-purple text-white" : ""}
+            className={viewMode === 'goods'
+              ? "bg-kf-purple text-white border-b-2 border-kf-purple rounded-b-none"
+              : "border-b-2 border-transparent rounded-b-none hover:border-kf-border"}
           >
             Record Goods
           </Button>
           <Button
-            variant={viewMode === 'invoices' ? 'default' : 'outline'}
+            variant={viewMode === 'invoices' ? 'default' : 'ghost'}
             onClick={() => setViewMode('invoices')}
-            className={viewMode === 'invoices' ? "bg-kf-purple text-white" : ""}
+            className={viewMode === 'invoices'
+              ? "bg-kf-purple text-white border-b-2 border-kf-purple rounded-b-none"
+              : "border-b-2 border-transparent rounded-b-none hover:border-kf-border"}
           >
             Invoices
           </Button>
@@ -717,7 +747,7 @@ export default function SupplierProfile() {
                         {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(transaction.totalAmount || 0)}
                       </td>
                       <td className="py-3 px-4 text-sm text-kf-text-dark">
-                        {transaction.paymentMethod}
+                        {transaction.paymentMethod || "-"}
                       </td>
                     </>
                   )}
@@ -1004,21 +1034,34 @@ export default function SupplierProfile() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-kf-text-mid">Payment Method (Optional)</Label>
-              <select
-                value={invoiceFormData.paymentMethod}
-                onChange={(e) => setInvoiceFormData({ ...invoiceFormData, paymentMethod: e.target.value })}
-                className="w-full bg-kf-background border border-kf-border rounded-md px-3 py-2 text-kf-text-dark"
-              >
-                <option value="">Select Method</option>
-                <option value="Bank">Bank</option>
-                <option value="Cash">Cash</option>
-                <option value="Other">Other</option>
-              </select>
+            <div className="flex items-center space-x-2 py-2 border-t border-kf-border">
+              <Checkbox
+                id="isPaid"
+                checked={invoiceFormData.isPaid}
+                onCheckedChange={(checked) => setInvoiceFormData({ ...invoiceFormData, isPaid: checked as boolean })}
+              />
+              <Label htmlFor="isPaid" className="text-sm text-kf-text-dark cursor-pointer">
+                Payment was made (check to exclude from supplier dues)
+              </Label>
             </div>
 
-            {invoiceFormData.paymentMethod === "Other" && (
+            {invoiceFormData.isPaid && (
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Payment Method</Label>
+                <select
+                  value={invoiceFormData.paymentMethod}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, paymentMethod: e.target.value })}
+                  className="w-full bg-kf-background border border-kf-border rounded-md px-3 py-2 text-kf-text-dark"
+                >
+                  <option value="">Select Method</option>
+                  <option value="Bank">Bank</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            )}
+
+            {invoiceFormData.isPaid && invoiceFormData.paymentMethod === "Other" && (
               <div className="space-y-2">
                 <Label className="text-kf-text-mid">Other Payment Method</Label>
                 <Input
@@ -1129,21 +1172,34 @@ export default function SupplierProfile() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-kf-text-mid">Payment Method (Optional)</Label>
-              <select
-                value={modifyInvoiceFormData.paymentMethod}
-                onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, paymentMethod: e.target.value })}
-                className="w-full bg-kf-background border border-kf-border rounded-md px-3 py-2 text-kf-text-dark"
-              >
-                <option value="">Select Method</option>
-                <option value="Bank">Bank</option>
-                <option value="Cash">Cash</option>
-                <option value="Other">Other</option>
-              </select>
+            <div className="flex items-center space-x-2 py-2 border-t border-kf-border">
+              <Checkbox
+                id="modifyIsPaid"
+                checked={modifyInvoiceFormData.isPaid}
+                onCheckedChange={(checked) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, isPaid: checked as boolean })}
+              />
+              <Label htmlFor="modifyIsPaid" className="text-sm text-kf-text-dark cursor-pointer">
+                Payment was made (check to exclude from supplier dues)
+              </Label>
             </div>
 
-            {modifyInvoiceFormData.paymentMethod === "Other" && (
+            {modifyInvoiceFormData.isPaid && (
+              <div className="space-y-2">
+                <Label className="text-kf-text-mid">Payment Method</Label>
+                <select
+                  value={modifyInvoiceFormData.paymentMethod}
+                  onChange={(e) => setModifyInvoiceFormData({ ...modifyInvoiceFormData, paymentMethod: e.target.value })}
+                  className="w-full bg-kf-background border border-kf-border rounded-md px-3 py-2 text-kf-text-dark"
+                >
+                  <option value="">Select Method</option>
+                  <option value="Bank">Bank</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            )}
+
+            {modifyInvoiceFormData.isPaid && modifyInvoiceFormData.paymentMethod === "Other" && (
               <div className="space-y-2">
                 <Label className="text-kf-text-mid">Other Payment Method</Label>
                 <Input
@@ -1414,11 +1470,12 @@ export default function SupplierProfile() {
               <select
                 value={statementType}
                 onChange={(e) => setStatementType(e.target.value)}
-                className="w-full p-2 bg-kf-background border border-kf-border rounded-md"
+                className="w-full p-3 text-base font-medium bg-kf-background border-2 border-kf-border rounded-md text-kf-text-dark focus:border-blue-500 focus:outline-none"
               >
-                <option value="all">All Transactions</option>
-                <option value="invoices">Purchase List</option>
-                <option value="payments">Payment List</option>
+                <option value="all" className="text-base">All Transactions</option>
+                <option value="invoices" className="text-base">Purchase List</option>
+                <option value="invoice-list" className="text-base">Invoice List</option>
+                <option value="payments" className="text-base">Payment List</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -1445,11 +1502,11 @@ export default function SupplierProfile() {
               Cancel
             </Button>
             <Button
-              onClick={handlePrintStatement}
+              onClick={handleExportExcel}
               disabled={printingStatement}
-              className="bg-kf-green hover:bg-kf-green-dark text-white"
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
-              {printingStatement ? "Printing..." : "Print"}
+              {printingStatement ? "Exporting..." : "Export Excel"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1470,6 +1527,7 @@ export default function SupplierProfile() {
                       <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Date</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Amount</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Payment Method</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Status</th>
                       <th className="text-center py-3 px-4 text-sm font-medium text-kf-text-mid">Actions</th>
                     </tr>
                   </thead>

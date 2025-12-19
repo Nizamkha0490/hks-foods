@@ -34,6 +34,7 @@ interface Expense {
   paymentMethod: string
   reference?: string
   notes?: string
+  vat?: number
 }
 
 export default function Expenses() {
@@ -61,6 +62,7 @@ export default function Expenses() {
     amount: "",
     paymentMethod: "Bank Transfer",
     reference: "",
+    vat: "0",
   })
 
   const loadExpenses = async () => {
@@ -128,6 +130,7 @@ export default function Expenses() {
         paymentMethod: finalPaymentMethod,
         reference: formData.reference || "",
         notes: finalCategory === "Other" ? customCategory : "",
+        vat: Number.parseInt(formData.vat),
       };
 
       await api.post("/expenses", payload);
@@ -175,6 +178,7 @@ export default function Expenses() {
         paymentMethod: finalPaymentMethod,
         reference: formData.reference || "",
         notes: finalCategory === "Other" ? customCategory : "",
+        vat: Number.parseInt(formData.vat),
       };
 
       await api.put(`/expenses/${selectedExpense._id}`, payload);
@@ -219,6 +223,7 @@ export default function Expenses() {
       amount: expense.amount.toString(),
       paymentMethod: expense.paymentMethod,
       reference: expense.reference || "",
+      vat: (expense.vat !== undefined ? expense.vat : 0).toString(),
     })
 
     // Check if we need to show custom inputs
@@ -254,6 +259,7 @@ export default function Expenses() {
       amount: "",
       paymentMethod: "Bank Transfer",
       reference: "",
+      vat: "0",
     })
     setShowOtherPaymentInput(false)
     setShowOtherCategoryInput(false)
@@ -463,12 +469,13 @@ export default function Expenses() {
       doc.text(`Total Records: ${filteredExpenses.length}`, 130, 58);
 
       // Table with proper alignment
-      const headers = [["Date", "Category", "Description", "Amount (£)", "Payment Method"]];
+      const headers = [["Date", "Category", "Description", "Amount (\u00a3)", "VAT", "Payment Method"]];
       const body = filteredExpenses.map(expense => [
         expense.date,
         expense.category,
         expense.description.length > 30 ? expense.description.substring(0, 30) + '...' : expense.description,
-        `£${expense.amount.toFixed(2)}`,
+        `\u00a3${expense.amount.toFixed(2)}`,
+        `${expense.vat !== undefined ? expense.vat : 0}%`,
         expense.paymentMethod
       ]);
 
@@ -492,11 +499,12 @@ export default function Expenses() {
           textColor: [60, 60, 60]
         },
         columnStyles: {
-          0: { cellWidth: 25, halign: 'center' },
-          1: { cellWidth: 30, halign: 'left' },
-          2: { cellWidth: 60, halign: 'left' },
-          3: { cellWidth: 25, halign: 'right' },
-          4: { cellWidth: 35, halign: 'left' }
+          0: { cellWidth: 22, halign: 'center' },
+          1: { cellWidth: 28, halign: 'left' },
+          2: { cellWidth: 55, halign: 'left' },
+          3: { cellWidth: 22, halign: 'right' },
+          4: { cellWidth: 15, halign: 'center' },
+          5: { cellWidth: 33, halign: 'left' }
         },
         margin: { top: 70 },
         theme: 'grid'
@@ -554,7 +562,7 @@ export default function Expenses() {
                 Add Expense
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-sidebar border-kf-border max-w-2xl" aria-describedby="add-dialog-description">
+            <DialogContent className="bg-sidebar border-kf-border max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="add-dialog-description">
               <DialogHeader>
                 <DialogTitle className="text-kf-text-light">Add New Expense</DialogTitle>
               </DialogHeader>
@@ -630,6 +638,21 @@ export default function Expenses() {
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     className="bg-muted border-kf-border"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vat" className="text-kf-text-mid">
+                    VAT *
+                  </Label>
+                  <Select value={formData.vat} onValueChange={(value) => setFormData({ ...formData, vat: value })}>
+                    <SelectTrigger className="bg-muted border-kf-border">
+                      <SelectValue placeholder="Select VAT" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="5">5%</SelectItem>
+                      <SelectItem value="20">20%</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="paymentMethod" className="text-kf-text-mid">
@@ -722,6 +745,7 @@ export default function Expenses() {
                 <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Category</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Description</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Amount</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">VAT</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Payment Method</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-kf-text-mid">Actions</th>
               </tr>
@@ -729,13 +753,13 @@ export default function Expenses() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-kf-text-mid">
+                  <td colSpan={7} className="py-8 text-center text-kf-text-mid">
                     Loading expenses...
                   </td>
                 </tr>
               ) : filteredExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-kf-text-mid">
+                  <td colSpan={7} className="py-8 text-center text-kf-text-mid">
                     No expenses found
                   </td>
                 </tr>
@@ -748,6 +772,7 @@ export default function Expenses() {
                     <td className="py-3 px-4 text-sm text-kf-text-light font-semibold">
                       £{expense.amount.toLocaleString()}
                     </td>
+                    <td className="py-3 px-4 text-sm text-kf-text-mid">{expense.vat !== undefined ? expense.vat : 0}%</td>
                     <td className="py-3 px-4 text-sm text-kf-text-mid">{expense.paymentMethod}</td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
@@ -774,7 +799,7 @@ export default function Expenses() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={(v) => { setIsEditDialogOpen(v); if (!v) { setSelectedExpense(null); resetForm(); } }}>
-        <DialogContent className="bg-sidebar border-kf-border max-w-2xl" aria-describedby="edit-dialog-description">
+        <DialogContent className="bg-sidebar border-kf-border max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="edit-dialog-description">
           <DialogHeader>
             <DialogTitle className="text-kf-text-light">Edit Expense</DialogTitle>
           </DialogHeader>
@@ -850,6 +875,21 @@ export default function Expenses() {
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                 className="bg-muted border-kf-border"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-vat" className="text-kf-text-mid">
+                VAT *
+              </Label>
+              <Select value={formData.vat} onValueChange={(value) => setFormData({ ...formData, vat: value })}>
+                <SelectTrigger className="bg-muted border-kf-border">
+                  <SelectValue placeholder="Select VAT" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0%</SelectItem>
+                  <SelectItem value="5">5%</SelectItem>
+                  <SelectItem value="20">20%</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-paymentMethod" className="text-kf-text-mid">

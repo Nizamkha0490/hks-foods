@@ -153,10 +153,12 @@ export const getAllLedgerEntries = asyncHandler(async (req, res) => {
 
   if (type === "client") {
     // Client ledger: only client orders and client payments
-    ledgerEntries = [...clientOrderEntries, ...paymentEntries]
+    const clientPayments = paymentEntries.filter(p => p.type === "Client")
+    ledgerEntries = [...clientOrderEntries, ...clientPayments]
   } else if (type === "supplier") {
     // Supplier ledger: only supplier purchases and supplier payments
-    ledgerEntries = [...supplierPurchaseEntries, ...paymentEntries]
+    const supplierPayments = paymentEntries.filter(p => p.type === "Supplier")
+    ledgerEntries = [...supplierPurchaseEntries, ...supplierPayments]
   } else {
     // All: combine everything
     ledgerEntries = [...clientOrderEntries, ...supplierPurchaseEntries, ...paymentEntries]
@@ -201,11 +203,11 @@ export const getLedgerStatement = asyncHandler(async (req, res) => {
 
       if (targetType === "client") {
         orders = await Order.find(query).populate("clientId", "name")
-        const paymentQuery = { ...query, clientId: { $exists: true } }
+        const paymentQuery = { ...query, clientId: { $exists: true, $ne: null } }
         payments = await Payment.find(paymentQuery).populate("clientId", "name")
       } else if (targetType === "supplier") {
         purchases = await Purchase.find(query).populate("supplierId", "name")
-        const paymentQuery = { ...query, supplierId: { $exists: true } }
+        const paymentQuery = { ...query, supplierId: { $exists: true, $ne: null } }
         payments = await Payment.find(paymentQuery).populate("supplierId", "name")
       }
 
@@ -323,12 +325,14 @@ export const getLedgerStatement = asyncHandler(async (req, res) => {
 
       const dateX = 45
       const descX = 110
-      const refX = 260
-      const typeX = 360
+      const entityX = 230
+      const refX = 330
+      const typeX = 410
       const amountX = 480
 
       doc.text("DATE", dateX, tableTop + 7)
       doc.text("DESCRIPTION", descX, tableTop + 7)
+      doc.text("ENTITY", entityX, tableTop + 7)
       doc.text("REFERENCE", refX, tableTop + 7)
       doc.text("TYPE", typeX, tableTop + 7)
       doc.text("AMOUNT", amountX, tableTop + 7)
@@ -343,17 +347,18 @@ export const getLedgerStatement = asyncHandler(async (req, res) => {
         }
 
         if (index % 2 === 0) {
-          doc.fillColor("#f8fafc").rect(40, y - 3, 515, 16).fill()
+          doc.fillColor("#f8fafc").rect(40, y - 3, 515, 20).fill()
           doc.fillColor("#000000")
         }
 
         doc.text(new Date(entry.date).toLocaleDateString("en-GB"), dateX, y)
-        doc.text(entry.description, descX, y, { width: 140, ellipsis: true })
-        doc.text(entry.reference, refX, y, { width: 90, ellipsis: true })
+        doc.text(entry.description, descX, y, { width: 110, ellipsis: true })
+        doc.text(entry.entity || "-", entityX, y, { width: 90, ellipsis: true })
+        doc.text(entry.reference, refX, y, { width: 70, ellipsis: true })
         doc.text(entry.type, typeX, y)
         doc.text(`£${entry.amount.toFixed(2)}`, amountX, y)
 
-        y += 16
+        y += 20
       })
     }
 

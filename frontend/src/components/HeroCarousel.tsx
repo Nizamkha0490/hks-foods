@@ -3,10 +3,9 @@ import Autoplay from 'embla-carousel-autoplay'
 import { useEffect, useState } from 'react'
 
 const images = [
-    { src: '/assets/hero-bg.png', alt: 'Modern Warehouse' },
-    { src: '/assets/fresh-produce.png', alt: 'Premium Fresh Produce' },
-    { src: '/assets/delivery-fleet.png', alt: 'Logistics Fleet' },
-    { src: '/assets/chef-plating.png', alt: 'Culinary Excellence' },
+    { src: '/assets/raw_chicken_8_cut_1766096875108.png', alt: 'Premium Poultry Cuts' },
+    { src: '/assets/fakir_donner_meat_1766096947697.png', alt: 'Quality Donner Meat' },
+    { src: '/assets/seekh_kabab_frozen_stack_1766097021267.png', alt: 'Authentic Kebabs' },
 ]
 
 export function HeroCarousel() {

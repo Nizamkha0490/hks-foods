@@ -773,26 +773,51 @@ export const getProfitStats = asyncHandler(async (req, res) => {
     return totalProfit;
   };
 
+  // Helper function to calculate expenses for a given period
+  const calculateExpenses = async (query) => {
+    const expenses = await Expense.find({ ...query, isActive: true });
+    return expenses.reduce((sum, expense) => {
+      const vatAmount = expense.amount * ((expense.vat || 0) / 100);
+      return sum + expense.amount + vatAmount;
+    }, 0);
+  };
+
   const totalProfit = await calculateProfit({ userId: req.admin._id });
+  const totalExpenses = await calculateExpenses({ userId: req.admin._id });
+
   const totalProfitThisMonth = await calculateProfit({
     userId: req.admin._id,
     createdAt: { $gte: startOfMonth }
   });
+  const totalExpensesThisMonth = await calculateExpenses({
+    userId: req.admin._id,
+    createdAt: { $gte: startOfMonth }
+  });
+
   const totalProfitThisWeek = await calculateProfit({
     userId: req.admin._id,
     createdAt: { $gte: startOfWeek }
   });
+  const totalExpensesThisWeek = await calculateExpenses({
+    userId: req.admin._id,
+    createdAt: { $gte: startOfWeek }
+  });
+
   const totalProfitToday = await calculateProfit({
+    userId: req.admin._id,
+    createdAt: { $gte: startOfToday }
+  });
+  const totalExpensesToday = await calculateExpenses({
     userId: req.admin._id,
     createdAt: { $gte: startOfToday }
   });
 
   res.status(200).json({
     success: true,
-    totalProfit,
-    totalProfitThisMonth,
-    totalProfitThisWeek,
-    totalProfitToday,
+    totalProfit: totalProfit - totalExpenses,
+    totalProfitThisMonth: totalProfitThisMonth - totalExpensesThisMonth,
+    totalProfitThisWeek: totalProfitThisWeek - totalExpensesThisWeek,
+    totalProfitToday: totalProfitToday - totalExpensesToday,
   });
 });
 
@@ -817,6 +842,7 @@ export const getProfitReport = asyncHandler(async (req, res) => {
   }
 
   const orders = await Order.find(query).populate('lines.productId');
+  const expenses = await Expense.find({ ...query, isActive: true });
 
   // Group by period based on view
   const profitData = {};
@@ -837,6 +863,7 @@ export const getProfitReport = asyncHandler(async (req, res) => {
       profitData[periodKey] = {
         totalSales: 0,
         totalCost: 0,
+        totalExpenses: 0,
         orderCount: 0
       };
     }
@@ -858,11 +885,37 @@ export const getProfitReport = asyncHandler(async (req, res) => {
     profitData[periodKey].orderCount += 1;
   });
 
+  // Add expenses to the corresponding periods
+  expenses.forEach(expense => {
+    let periodKey;
+    const expenseDate = new Date(expense.createdAt);
+
+    if (view === 'daily') {
+      periodKey = expenseDate.toISOString().split('T')[0];
+    } else if (view === 'monthly') {
+      periodKey = `${expenseDate.getFullYear()}-${String(expenseDate.getMonth() + 1).padStart(2, '0')}`;
+    } else if (view === 'yearly') {
+      periodKey = String(expenseDate.getFullYear());
+    }
+
+    if (!profitData[periodKey]) {
+      profitData[periodKey] = {
+        totalSales: 0,
+        totalCost: 0,
+        totalExpenses: 0,
+        orderCount: 0
+      };
+    }
+
+    profitData[periodKey].totalExpenses += expense.amount + (expense.amount * ((expense.vat || 0) / 100));
+  });
+
   // Convert to array and format
   const report = Object.entries(profitData)
     .map(([period, data], index) => {
       const grossProfit = data.totalSales - data.totalCost;
-      const profitMargin = data.totalSales > 0 ? (grossProfit / data.totalSales) * 100 : 0;
+      const netProfit = grossProfit - data.totalExpenses;
+      const profitMargin = data.totalSales > 0 ? (netProfit / data.totalSales) * 100 : 0;
 
       let periodLabel;
       if (view === 'daily') {
@@ -885,6 +938,8 @@ export const getProfitReport = asyncHandler(async (req, res) => {
         'Total Sales': data.totalSales.toFixed(2),
         'Total Cost': data.totalCost.toFixed(2),
         'Gross Profit': grossProfit.toFixed(2),
+        'Total Expenses': data.totalExpenses.toFixed(2),
+        'Net Profit': netProfit.toFixed(2),
         'Profit Margin %': profitMargin.toFixed(2),
         'Orders': data.orderCount
       };

@@ -26,6 +26,7 @@ export default function Ledgers() {
   const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest")
   const [loading, setLoading] = useState(true)
   const [isPrintStatementOpen, setIsPrintStatementOpen] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
   const [dateRange, setDateRange] = useState({ from: "", to: "" })
   const [activeTab, setActiveTab] = useState<"client" | "supplier">("client")
   const [printType, setPrintType] = useState<"all" | "client" | "supplier">("all")
@@ -33,6 +34,7 @@ export default function Ledgers() {
 
   const handlePrintStatement = async () => {
     try {
+      setIsPrinting(true)
       const response = await api.get(`/ledger/statement?from=${dateRange.from}&to=${dateRange.to}&type=${printType}`, {
         responseType: "blob",
       })
@@ -49,6 +51,8 @@ export default function Ledgers() {
     } catch (error) {
       console.error("Error printing statement:", error)
       toast.error("Error printing statement")
+    } finally {
+      setIsPrinting(false)
     }
   }
 
@@ -231,11 +235,20 @@ export default function Ledgers() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPrintStatementOpen(false)} className="border-kf-border">
+            <Button
+              variant="outline"
+              onClick={() => setIsPrintStatementOpen(false)}
+              className="border-kf-border"
+              disabled={isPrinting}
+            >
               Cancel
             </Button>
-            <Button onClick={handlePrintStatement} className="bg-kf-green hover:bg-kf-green-dark text-white">
-              Print
+            <Button
+              onClick={handlePrintStatement}
+              className="bg-kf-green hover:bg-kf-green-dark text-white"
+              disabled={isPrinting}
+            >
+              {isPrinting ? "Generating..." : "Print"}
             </Button>
           </DialogFooter>
         </DialogContent>

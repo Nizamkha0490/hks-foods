@@ -1,79 +1,101 @@
 import { Link } from "react-router-dom"
-import { Facebook, Instagram, Linkedin } from "lucide-react"
+import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone } from "lucide-react"
 
 export function PublicFooter() {
     return (
-        <footer className="bg-gray-900 text-gray-300 py-16 border-t border-gray-800">
+        <footer className="bg-zinc-950 text-zinc-400 py-16 border-t border-zinc-800">
             <div className="container mx-auto px-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
                     {/* Brand */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-white">
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-white mb-2">
                             <img src="/logoupdt.png" alt="HKS Foods Logo" className="h-10 w-auto" />
                             <span>HKS Foods</span>
                         </div>
-                        <p className="text-gray-400 leading-relaxed">
-                            Premium food distribution partner for businesses across the UK. Quality, reliability, and excellence in every delivery.
+                        <p className="text-zinc-500 leading-relaxed text-sm">
+                            Premium food distribution partner for businesses across the UK. Delivering quality, reliability, and excellence to kitchens nationwide.
                         </p>
+                        <div className="flex gap-4 pt-2">
+                            <SocialLink href="#" icon={<Facebook className="h-4 w-4" />} label="Facebook" />
+                            <SocialLink href="#" icon={<Instagram className="h-4 w-4" />} label="Instagram" />
+                            <SocialLink href="#" icon={<Linkedin className="h-4 w-4" />} label="LinkedIn" />
+                        </div>
                     </div>
 
                     {/* Quick Links */}
                     <div>
-                        <h3 className="text-white font-bold text-lg mb-6">Quick Links</h3>
+                        <h3 className="text-zinc-100 font-bold text-lg mb-6">Company</h3>
                         <ul className="space-y-3">
-                            <li><Link to="/" className="hover:text-blue-400 transition-colors">Home</Link></li>
-                            <li><Link to="/services" className="hover:text-blue-400 transition-colors">Our Services</Link></li>
-                            <li><Link to="/product-inventory" className="hover:text-blue-400 transition-colors">Product Inventory</Link></li>
-                            <li><Link to="/trusted-suppliers" className="hover:text-blue-400 transition-colors">Trusted Suppliers</Link></li>
+                            <FooterLink to="/" label="Home" />
+                            <FooterLink to="/services" label="Our Services" />
+                            <FooterLink to="/trusted-suppliers" label="Partner With Us" />
+                            <FooterLink to="/contact" label="Contact Us" />
                         </ul>
                     </div>
 
-                    {/* Support */}
+                    {/* Legal */}
                     <div>
-                        <h3 className="text-white font-bold text-lg mb-6">Support</h3>
+                        <h3 className="text-zinc-100 font-bold text-lg mb-6">Legal</h3>
                         <ul className="space-y-3">
-                            <li><Link to="/contact" className="hover:text-blue-400 transition-colors">Contact Us</Link></li>
-                            <li><Link to="/privacy-policy" className="hover:text-blue-400 transition-colors">Privacy Policy</Link></li>
-                            <li><Link to="/terms-of-service" className="hover:text-blue-400 transition-colors">Terms of Service</Link></li>
-                            <li><Link to="/faq" className="hover:text-blue-400 transition-colors">FAQ</Link></li>
+                            <FooterLink to="/privacy-policy" label="Privacy Policy" />
+                            <FooterLink to="/terms-of-service" label="Terms of Service" />
+                            <FooterLink to="/cookies" label="Cookie Policy" />
+                            <FooterLink to="/accessibility" label="Accessibility" />
                         </ul>
                     </div>
 
                     {/* Contact Info */}
                     <div>
-                        <h3 className="text-white font-bold text-lg mb-6">Contact</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            <li>104 Anthony Road</li>
-                            <li>Birmingham, B8 3AA</li>
-                            <li>United Kingdom</li>
-                            <li>+44 7477 956299</li>
-                            <li>info@hksfoods.com</li>
-                            <li className="pt-2">
-                                <div className="flex gap-4">
-                                    <a href="#" className="h-8 w-8 bg-gray-800 rounded-full hover:bg-blue-600 transition-colors cursor-pointer flex items-center justify-center" aria-label="Facebook">
-                                        <Facebook className="h-4 w-4" />
-                                    </a>
-                                    <a href="#" className="h-8 w-8 bg-gray-800 rounded-full hover:bg-pink-600 transition-colors cursor-pointer flex items-center justify-center" aria-label="Instagram">
-                                        <Instagram className="h-4 w-4" />
-                                    </a>
-                                    <a href="#" className="h-8 w-8 bg-gray-800 rounded-full hover:bg-blue-500 transition-colors cursor-pointer flex items-center justify-center" aria-label="LinkedIn">
-                                        <Linkedin className="h-4 w-4" />
-                                    </a>
-                                </div>
+                        <h3 className="text-zinc-100 font-bold text-lg mb-6">Get in Touch</h3>
+                        <ul className="space-y-4 text-sm">
+                            <ContactItem icon={<MapPin className="h-4 w-4" />} text="104 Anthony Road, Birmingham, B8 3AA" />
+                            <ContactItem icon={<Phone className="h-4 w-4" />} text="+44 7477 956299" />
+                            <ContactItem icon={<Mail className="h-4 w-4" />} text="info@hksfoods.com" />
+                            <li className="text-zinc-500 text-xs mt-4">
+                                Registered in England & Wales
                             </li>
                         </ul>
                     </div>
                 </div>
 
-                <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
-                    <div>© 2025 HKS Foods Ltd. All rights reserved.</div>
+                <div className="border-t border-zinc-900 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-zinc-600">
+                    <div>© {new Date().getFullYear()} HKS Foods Ltd. All rights reserved.</div>
                     <div className="flex gap-6">
-                        <Link to="/privacy" className="hover:text-white transition-colors">Privacy</Link>
-                        <Link to="/cookies" className="hover:text-white transition-colors">Cookies</Link>
-                        <Link to="/accessibility" className="hover:text-white transition-colors">Accessibility</Link>
+                        <Link to="/sitemap" className="hover:text-zinc-400 transition-colors">Sitemap</Link>
                     </div>
                 </div>
             </div>
         </footer>
+    )
+}
+
+function FooterLink({ to, label }: { to: string, label: string }) {
+    return (
+        <li>
+            <Link to={to} className="hover:text-emerald-400 transition-colors block py-0.5">
+                {label}
+            </Link>
+        </li>
+    )
+}
+
+function SocialLink({ href, icon, label }: { href: string, icon: React.ReactNode, label: string }) {
+    return (
+        <a
+            href={href}
+            className="h-8 w-8 bg-zinc-900 rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all duration-300 flex items-center justify-center border border-zinc-800"
+            aria-label={label}
+        >
+            {icon}
+        </a>
+    )
+}
+
+function ContactItem({ icon, text }: { icon: React.ReactNode, text: string }) {
+    return (
+        <li className="flex items-start gap-3">
+            <span className="text-emerald-500 mt-0.5">{icon}</span>
+            <span className="text-zinc-400">{text}</span>
+        </li>
     )
 }
