@@ -313,7 +313,7 @@ export const exportClientStatement = asyncHandler(async (req, res) => {
     userId: req.admin._id,
     isDeleted: false,
     ...(from && to ? { createdAt: { $gte: new Date(from), $lte: new Date(to) } } : {})
-  }).lean();
+  }).sort({ createdAt: -1 }).lean();
 
   // Calculate totals
   // Calculate totals - ONLY for "On Account" orders for invoice total
@@ -388,6 +388,9 @@ export const exportClientStatement = asyncHandler(async (req, res) => {
   } else if (type === "payments") {
     statementTitle = "PAYMENT LIST";
     statementSubtitle = "Payment Transactions Only";
+  } else if (type === "credit_notes") {
+    statementTitle = "CREDIT NOTE LIST";
+    statementSubtitle = "Credit Note Transactions Only";
   }
 
   // Add invoice type to subtitle if filtered
@@ -471,6 +474,13 @@ export const exportClientStatement = asyncHandler(async (req, res) => {
     doc.text(`Total Payments: ${payments.length}`, summaryX, summaryY);
     summaryY += 12;
     doc.text(`Amount Paid: £${totalPayments.toFixed(2)}`, summaryX, summaryY);
+    summaryY += 12;
+  }
+
+  if (type === "all" || type === "credit_notes") {
+    doc.text(`Total Credit Notes: ${creditNotes.length}`, summaryX, summaryY);
+    summaryY += 12;
+    doc.text(`Credit Amount: £${totalCreditNotes.toFixed(2)}`, summaryX, summaryY);
     summaryY += 12;
   }
 
@@ -579,10 +589,64 @@ export const exportClientStatement = asyncHandler(async (req, res) => {
     y += 10;
   }
 
+  // CREDIT NOTES SECTION (only for "all" or "credit_notes")
+  if ((type === "all" || type === "credit_notes") && creditNotes.length > 0) {
+    if (type === "all") {
+      // Add separation line and section header for credit notes
+      doc.strokeColor("#e5e7eb").lineWidth(0.5).moveTo(40, y).lineTo(555, y).stroke();
+      y += 15;
+      doc.fillColor("#1e3a8a").fontSize(12).font("Helvetica-Bold").text("CREDIT NOTES", 40, y);
+      y += 20;
+    }
+
+    // Credit Notes Table Header
+    doc.fillColor("#1e3a8a").rect(40, y, 515, 20).fill();
+    doc.fillColor("#ffffff").fontSize(9).font("Helvetica-Bold");
+
+    const cnDateX = 45, cnNoX = 100, cnOrderNoX = 200, cnTypeX = 350, cnAmountX = 450;
+    doc.text("DATE", cnDateX, y + 7);
+    doc.text("CREDIT NOTE NO", cnNoX, y + 7, { width: 90 });
+    doc.text("REF ORDER", cnOrderNoX, y + 7, { width: 90 });
+    doc.text("TYPE", cnTypeX, y + 7);
+    doc.text("AMOUNT", cnAmountX, y + 7);
+
+    // Credit Notes Table Rows
+    doc.fillColor("#000000").fontSize(8).font("Helvetica");
+    y += 25;
+
+    creditNotes.forEach((cn, index) => {
+      // Alternate row background
+      if (index % 2 === 0) {
+        doc.fillColor("#f8fafc").rect(40, y - 3, 515, 16).fill();
+        doc.fillColor("#000000");
+      }
+
+      doc.text(new Date(cn.createdAt).toLocaleDateString("en-GB"), cnDateX, y);
+      doc.text(cn.creditNoteNo || "N/A", cnNoX, y);
+      doc.text(cn.orderNo || "-", cnOrderNoX, y);
+      doc.text(cn.type.charAt(0).toUpperCase() + cn.type.slice(1), cnTypeX, y);
+
+      doc.fillColor("#dc2626"); // Red for credit notes
+      doc.text(`£${cn.totalAmount.toFixed(2)}`, cnAmountX, y, { width: 50, align: "right" });
+      doc.fillColor("#000000");
+
+      y += 16;
+
+      // Add page break if needed
+      if (y > 650) {
+        doc.addPage();
+        y = 40;
+      }
+    });
+
+    y += 10;
+  }
+
   // Show message if no data
   if ((type === "invoices" && transactions.length === 0) ||
     (type === "payments" && payments.length === 0) ||
-    (type === "all" && transactions.length === 0 && payments.length === 0)) {
+    (type === "credit_notes" && creditNotes.length === 0) ||
+    (type === "all" && transactions.length === 0 && payments.length === 0 && creditNotes.length === 0)) {
     doc.fillColor("#666666").fontSize(10).font("Helvetica")
       .text("No transactions found for the selected criteria.", 40, y, { align: "center" });
     y += 20;
@@ -603,6 +667,10 @@ export const exportClientStatement = asyncHandler(async (req, res) => {
 
     doc.text("Total Paid:", 420, y, { width: 80, align: "right" });
     doc.text(`£${totalPayments.toFixed(2)}`, 500, y, { width: 50, align: "right" });
+    y += 12;
+
+    doc.text("Total Credit Notes:", 420, y, { width: 80, align: "right" });
+    doc.text(`£${totalCreditNotes.toFixed(2)}`, 500, y, { width: 50, align: "right" });
     y += 12;
 
     doc.fontSize(10).font("Helvetica-Bold");

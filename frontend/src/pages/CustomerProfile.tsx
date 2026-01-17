@@ -1410,28 +1410,29 @@ export default function CustomerProfile() {
       <Dialog open={isPrintStatementOpen} onOpenChange={setIsPrintStatementOpen}>
         <DialogContent className="max-w-md bg-sidebar border-kf-border">
           <DialogHeader>
-            <DialogTitle className="text-kf-text-dark">Print Statement</DialogTitle>
+            <DialogTitle className="text-black">Print Statement</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-kf-text-mid">Statement Type</Label>
+              <Label className="text-black font-medium">Statement Type</Label>
               <select
                 value={statementType}
                 onChange={(e) => setStatementType(e.target.value)}
-                className="w-full p-2 bg-kf-background border border-kf-border rounded-md"
+                className="w-full p-2 bg-white text-black border border-kf-border rounded-md outline-none"
               >
                 <option value="all">All Transactions</option>
                 <option value="invoices">Invoice List</option>
                 <option value="payments">Payment List</option>
+                <option value="credit_notes">Credit Note List</option>
               </select>
             </div>
             <div className="space-y-2">
-              <Label className="text-kf-text-mid">Account Type</Label>
+              <Label className="text-black font-medium">Account Type</Label>
               <select
                 value={invoiceTypeFilter}
                 onChange={(e) => setInvoiceTypeFilter(e.target.value)}
-                disabled={statementType === "payments"}
-                className="w-full p-2 bg-kf-background border border-kf-border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={statementType === "payments" || statementType === "credit_notes"}
+                className="w-full p-2 bg-white text-black border border-kf-border rounded-md disabled:opacity-50 disabled:cursor-not-allowed outline-none"
               >
                 <option value="all">All Types</option>
                 <option value="on_account">On Account</option>
@@ -1442,21 +1443,21 @@ export default function CustomerProfile() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label className="text-kf-text-mid">From</Label>
+              <Label className="text-black font-medium">From</Label>
               <Input
                 type="date"
                 value={dateRange.from}
                 onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-                className="bg-kf-background border-kf-border"
+                className="bg-white text-black border-kf-border"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-kf-text-mid">To</Label>
+              <Label className="text-black font-medium">To</Label>
               <Input
                 type="date"
                 value={dateRange.to}
                 onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-                className="bg-kf-background border-kf-border"
+                className="bg-white text-black border-kf-border"
               />
             </div>
           </div>
